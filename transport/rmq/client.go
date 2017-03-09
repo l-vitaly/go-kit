@@ -1,13 +1,12 @@
 package rmq
 
 import (
+	"context"
 	"fmt"
-    "context"
 
 	"github.com/go-kit/kit/endpoint"
 	"github.com/l-vitaly/rmqrpc"
-    "github.com/l-vitaly/rmqrpc/pb"
-
+	pb "github.com/l-vitaly/rmqrpc/proto"
 )
 
 // Client wraps a RMQ RPC connection and provides a method that implements
@@ -76,11 +75,11 @@ func (c Client) Endpoint() endpoint.Endpoint {
 
 		rmqReply := <-out
 
-        replyErr, ok := rmqReply.(*pb.Error)
+		replyErr, ok := rmqReply.(*pb.Error)
 
-        if ok {
-            return nil, fmt.Errorf("Reply error: %v Code: %d", replyErr, replyErr.Code)
-        }
+		if ok {
+			return nil, fmt.Errorf("Reply error: %v Code: %d", replyErr, replyErr.Code)
+		}
 
 		response, err := c.dec(ctx, rmqReply)
 		if err != nil {

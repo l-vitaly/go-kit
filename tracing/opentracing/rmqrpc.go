@@ -1,7 +1,7 @@
 package opentracing
 
 import (
-    "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 )
 
