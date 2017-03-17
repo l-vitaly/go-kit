@@ -12,9 +12,9 @@ type clientGRPC struct {
 	methods map[string]*grpctransport.Client
 }
 
-func NewClient(serviceName string, t transportlayer.Endpoints, conn *grpc.ClientConn) transportlayer.Client {
+func NewClient(serviceName string, conn *grpc.ClientConn, endpoints ...transportlayer.Endpoint) transportlayer.Client {
 	methods := make(map[string]*grpctransport.Client)
-	for _, m := range t.Endpoints() {
+	for _, m := range endpoints {
 
 		var converterGRPC *EndpointConverter
 		for _, converter := range m.Converters() {

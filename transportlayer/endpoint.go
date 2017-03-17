@@ -55,7 +55,7 @@ func WithConverter(c interface{}) EndpointOption {
 
 func WithLogger(l log.Logger) EndpointOption {
 	return func(m *endpoint) {
-		logger := log.With(l, "endpoint", m.name)
+		logger := log.With(l, "method", m.name)
 		next := m.fn
 
 		m.fn = func(ctx context.Context, request interface{}) (resp interface{}, err error) {
@@ -69,7 +69,7 @@ func WithLogger(l log.Logger) EndpointOption {
 
 func WithDuration(d metrics.Histogram) EndpointOption {
 	return func(m *endpoint) {
-		histogram := d.With("endpoint", m.name)
+		histogram := d.With("method", m.name)
 		next := m.fn
 
 		m.fn = func(ctx context.Context, request interface{}) (response interface{}, err error) {

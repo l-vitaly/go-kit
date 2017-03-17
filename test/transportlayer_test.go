@@ -66,9 +66,7 @@ func TestTransportLayer(t *testing.T) {
 	logger := log.NewJSONLogger(os.Stderr)
 
 	svc := &service{}
-	endpoints := transportlayer.NewEndpoints()
-
-	endpoints.Endpoint(
+	endpoints := []transportlayer.Endpoint{
 		transportlayer.NewEndpoint(
 			"MethodName",
 			func(ctx context.Context, request interface{}) (interface{}, error) {
@@ -99,7 +97,7 @@ func TestTransportLayer(t *testing.T) {
 				},
 			),
 		),
-	)
+	}
 
 	go func() {
 		listener, err := net.Listen("tcp", ":50505")
@@ -109,7 +107,7 @@ func TestTransportLayer(t *testing.T) {
 		}
 
 		grpcs := grpc.NewServer()
-		pb.RegisterNameServer(grpcs, &server{transportgrpc.NewServer(endpoints)})
+		pb.RegisterNameServer(grpcs, &server{transportgrpc.NewServer(endpoints...)})
 
 		grpcs.Serve(listener)
 	}()
@@ -117,7 +115,7 @@ func TestTransportLayer(t *testing.T) {
 	conn, _ := grpc.Dial(":50505", grpc.WithInsecure())
 	defer conn.Close()
 
-	c := &client{transportgrpc.NewClient("Name", endpoints, conn)}
+	c := &client{transportgrpc.NewClient("Name", conn, endpoints...)}
 
 	res, err := c.MethodName(context.Background(), "")
 	u.AssertNotError(err, "Call MethodName")
