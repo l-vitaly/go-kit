@@ -4,7 +4,7 @@ import (
 	grpctransport "github.com/go-kit/kit/transport/grpc"
 )
 
-type EndpointConverterGRPC struct {
+type EndpointConverter struct {
 	EncodeReq  grpctransport.EncodeRequestFunc
 	EncodeResp grpctransport.EncodeResponseFunc
 	DecodeReq  grpctransport.DecodeRequestFunc

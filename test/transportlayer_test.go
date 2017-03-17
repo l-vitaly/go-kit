@@ -78,7 +78,7 @@ func TestTransportLayer(t *testing.T) {
 			},
 			transportlayer.WithLogger(logger),
 			transportlayer.WithConverter(
-				&transportgrpc.EndpointConverterGRPC{
+				&transportgrpc.EndpointConverter{
 					func(_ context.Context, request interface{}) (interface{}, error) {
 						req := request.(*MethodNameRequest)
 						return &pb.MethodNameRequest{Param1: req.Param1}, nil

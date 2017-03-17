@@ -16,9 +16,9 @@ func NewServer(endpoints transportlayer.Endpoints) transportlayer.Server {
 	methods := make(map[string]*grpctransport.Server)
 
 	for _, m := range endpoints.Endpoints() {
-		var converterGRPC *EndpointConverterGRPC
+		var converterGRPC *EndpointConverter
 		for _, converter := range m.Converters() {
-			if c, ok := converter.(*EndpointConverterGRPC); ok {
+			if c, ok := converter.(*EndpointConverter); ok {
 				converterGRPC = c
 				break
 			}

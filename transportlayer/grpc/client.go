@@ -16,9 +16,9 @@ func NewClient(serviceName string, t transportlayer.Endpoints, conn *grpc.Client
 	methods := make(map[string]*grpctransport.Client)
 	for _, m := range t.Endpoints() {
 
-		var converterGRPC *EndpointConverterGRPC
+		var converterGRPC *EndpointConverter
 		for _, converter := range m.Converters() {
-			if c, ok := converter.(*EndpointConverterGRPC); ok {
+			if c, ok := converter.(*EndpointConverter); ok {
 				converterGRPC = c
 				break
 			}
