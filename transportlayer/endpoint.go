@@ -71,19 +71,19 @@ func (m *endpoint) Name() string {
 	return m.name
 }
 
-func WithMethodEncode(req grpctransport.EncodeRequestFunc, resp grpctransport.EncodeResponseFunc) EndpointOption {
+func WithEncode(req grpctransport.EncodeRequestFunc, resp grpctransport.EncodeResponseFunc) EndpointOption {
 	return func(m *endpoint) {
 		m.encode = endpointConverter{req: req, resp: resp}
 	}
 }
 
-func WithMethodDecode(req grpctransport.DecodeRequestFunc, resp grpctransport.DecodeResponseFunc) EndpointOption {
+func WithDecode(req grpctransport.DecodeRequestFunc, resp grpctransport.DecodeResponseFunc) EndpointOption {
 	return func(m *endpoint) {
 		m.decode = endpointConverter{req: req, resp: resp}
 	}
 }
 
-func WithMethodLogger(l log.Logger) EndpointOption {
+func WithLogger(l log.Logger) EndpointOption {
 	return func(m *endpoint) {
 		logger := log.With(l, "endpoint", m.name)
 		next := m.fn
@@ -97,7 +97,7 @@ func WithMethodLogger(l log.Logger) EndpointOption {
 	}
 }
 
-func WithMethodDuration(d metrics.Histogram) EndpointOption {
+func WithDuration(d metrics.Histogram) EndpointOption {
 	return func(m *endpoint) {
 		histogram := d.With("endpoint", m.name)
 		next := m.fn

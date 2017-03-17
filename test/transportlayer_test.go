@@ -77,8 +77,8 @@ func TestTransportLayer(t *testing.T) {
 				return &MethodNameResponse{Result: res, Err: err}, nil
 			},
 			pb.MethodNameResponse{},
-			transportlayer.WithMethodLogger(logger),
-			transportlayer.WithMethodEncode(
+			transportlayer.WithLogger(logger),
+			transportlayer.WithEncode(
 				func(_ context.Context, request interface{}) (interface{}, error) {
 					req := request.(*MethodNameRequest)
 					return &pb.MethodNameRequest{Param1: req.Param1}, nil
@@ -88,7 +88,7 @@ func TestTransportLayer(t *testing.T) {
 					return &pb.MethodNameResponse{Result: resp.Result, Err: eutils.Err2Str(resp.Err)}, nil
 				},
 			),
-			transportlayer.WithMethodDecode(
+			transportlayer.WithDecode(
 				func(_ context.Context, request interface{}) (interface{}, error) {
 					req := request.(*pb.MethodNameRequest)
 					return &MethodNameRequest{Param1: req.Param1}, nil
