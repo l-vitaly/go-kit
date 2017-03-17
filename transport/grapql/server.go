@@ -13,7 +13,7 @@ import (
 type Server struct {
 	ctx    context.Context
 	e      endpoint.Endpoint
-    before []RequestFunc
+	before []RequestFunc
 	dec    DecodeRequestFunc
 	logger log.Logger
 }
@@ -22,7 +22,7 @@ func NewServer(
 	ctx context.Context,
 	e endpoint.Endpoint,
 	dec DecodeRequestFunc,
-    options ...ServerOption) *Server {
+	options ...ServerOption) *Server {
 	s := &Server{
 		ctx:    ctx,
 		e:      e,
@@ -30,9 +30,9 @@ func NewServer(
 		logger: log.NewNopLogger(),
 	}
 
-    for _, option := range options {
-        option(s)
-    }
+	for _, option := range options {
+		option(s)
+	}
 	return s
 }
 
@@ -41,31 +41,31 @@ type ServerOption func(*Server)
 // ServerBefore functions are executed on the HTTP request object before the
 // request is decoded.
 func ServerBefore(before ...RequestFunc) ServerOption {
-    return func(s *Server) { s.before = before }
+	return func(s *Server) { s.before = before }
 }
 
 func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-    ctx := s.ctx
+	ctx := s.ctx
 
-    for _, f := range s.before {
-        ctx = f(ctx, r)
-    }
+	for _, f := range s.before {
+		ctx = f(ctx, r)
+	}
 
 	req, err := s.dec(ctx, r)
-    if err != nil {
-        s.logger.Log("err", err)
-        s.errorEncoder(ctx, err, w)
-        return
-    }
+	if err != nil {
+		s.logger.Log("err", err)
+		s.errorEncoder(ctx, err, w)
+		return
+	}
 
-    p, err := s.e(ctx, req)
-    if err != nil {
-        s.logger.Log("err", err)
-        s.errorEncoder(ctx, err, w)
-        return
-    }
+	p, err := s.e(ctx, req)
+	if err != nil {
+		s.logger.Log("err", err)
+		s.errorEncoder(ctx, err, w)
+		return
+	}
 
-    s.encodeResponse(ctx, w, graphql.Do(p.(graphql.Params)))
+	s.encodeResponse(ctx, w, graphql.Do(p.(graphql.Params)))
 }
 
 func (s Server) errorEncoder(_ context.Context, err error, w http.ResponseWriter) {
@@ -77,10 +77,10 @@ func (s Server) errorEncoder(_ context.Context, err error, w http.ResponseWriter
 }
 
 func (s Server) encodeResponse(ctx context.Context, w http.ResponseWriter, response interface{}) error {
-    if e, ok := response.(error); ok {
-        s.errorEncoder(ctx, e, w)
-        return nil
-    }
-    w.Header().Set("Content-Type", "application/json; charset=utf-8")
-    return json.NewEncoder(w).Encode(response)
+	if e, ok := response.(error); ok {
+		s.errorEncoder(ctx, e, w)
+		return nil
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	return json.NewEncoder(w).Encode(response)
 }

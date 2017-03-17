@@ -70,9 +70,9 @@ func ServerErrorLogger(logger log.Logger) ServerOption {
 func (s Server) ServeRMQ(rmqCtx context.Context, req interface{}) (context.Context, interface{}, error) {
 	ctx := s.ctx
 
-    for _, f := range s.before {
-        ctx = f(ctx)
-    }
+	for _, f := range s.before {
+		ctx = f(ctx)
+	}
 
 	request, err := s.dec(rmqCtx, req)
 	if err != nil {
@@ -86,9 +86,9 @@ func (s Server) ServeRMQ(rmqCtx context.Context, req interface{}) (context.Conte
 		return rmqCtx, nil, err
 	}
 
-    for _, f := range s.after {
-        f(ctx)
-    }
+	for _, f := range s.after {
+		f(ctx)
+	}
 
 	rmqResp, err := s.enc(rmqCtx, response)
 	if err != nil {

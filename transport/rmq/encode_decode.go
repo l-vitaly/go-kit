@@ -25,4 +25,3 @@ type EncodeResponseFunc func(context.Context, interface{}) (response interface{}
 // endpoints. One straightforward DecodeResponseFunc could be something that
 // decodes from the RMQ RPC response message to the concrete response type.
 type DecodeResponseFunc func(context.Context, interface{}) (response interface{}, err error)
-

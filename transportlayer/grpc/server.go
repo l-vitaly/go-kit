@@ -24,9 +24,9 @@ func NewServer(endpoints transportlayer.Endpoints) transportlayer.Server {
 			}
 		}
 
-        if converterGRPC == nil {
-            panic("GRPC converter not found")
-        }
+		if converterGRPC == nil {
+			panic("GRPC converter not found")
+		}
 
 		methods[m.Name()] = grpctransport.NewServer(
 			m.Fn(),
