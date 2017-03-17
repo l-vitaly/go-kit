@@ -8,7 +8,9 @@ import (
 	gokitendpoint "github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/metrics"
+	"github.com/go-kit/kit/tracing/opentracing"
 	"github.com/l-vitaly/eutils"
+	opentracinggo "github.com/opentracing/opentracing-go"
 )
 
 type Endpoint interface {
@@ -76,5 +78,11 @@ func WithDuration(d metrics.Histogram) EndpointOption {
 			}(time.Now())
 			return next(ctx, request)
 		}
+	}
+}
+
+func WithTrace(tracer opentracinggo.Tracer) EndpointOption {
+	return func(m *endpoint) {
+		m.fn = opentracing.TraceServer(tracer, m.name)(m.fn)
 	}
 }
