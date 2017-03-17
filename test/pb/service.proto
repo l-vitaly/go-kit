@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option csharp_namespace = "Devim.Protobuf.ArchiCreditHistory";
+option cc_enable_arenas = true;
+option go_package = "pb";
+option java_package = "com.devim.protobuf.archicredithistory";
+option java_outer_classname = "ArchiCreditHistoryProto";
+option objc_class_prefix = "GPB";
+
+package pb;
+
+service Name {
+    rpc MethodName (MethodNameRequest) returns (MethodNameResponse) {
+    }
+}
+
+message MethodNameRequest {
+    string param1 = 1;
+}
+
+message MethodNameResponse {
+    string result = 1;
+    string err = 2;
+}
