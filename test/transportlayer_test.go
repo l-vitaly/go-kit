@@ -76,26 +76,26 @@ func TestTransportLayer(t *testing.T) {
 				res, err := svc.MethodName(ctx, req.Param1)
 				return &MethodNameResponse{Result: res, Err: err}, nil
 			},
-			pb.MethodNameResponse{},
 			transportlayer.WithLogger(logger),
-			transportlayer.WithEncode(
-				func(_ context.Context, request interface{}) (interface{}, error) {
-					req := request.(*MethodNameRequest)
-					return &pb.MethodNameRequest{Param1: req.Param1}, nil
-				},
-				func(_ context.Context, response interface{}) (interface{}, error) {
-					resp := response.(*MethodNameResponse)
-					return &pb.MethodNameResponse{Result: resp.Result, Err: eutils.Err2Str(resp.Err)}, nil
-				},
-			),
-			transportlayer.WithDecode(
-				func(_ context.Context, request interface{}) (interface{}, error) {
-					req := request.(*pb.MethodNameRequest)
-					return &MethodNameRequest{Param1: req.Param1}, nil
-				},
-				func(_ context.Context, response interface{}) (interface{}, error) {
-					resp := response.(*pb.MethodNameResponse)
-					return &MethodNameResponse{Result: resp.Result, Err: eutils.Str2Err(resp.Err)}, nil
+			transportlayer.WithConverter(
+				&transportgrpc.EndpointConverterGRPC{
+					func(_ context.Context, request interface{}) (interface{}, error) {
+						req := request.(*MethodNameRequest)
+						return &pb.MethodNameRequest{Param1: req.Param1}, nil
+					},
+					func(_ context.Context, response interface{}) (interface{}, error) {
+						resp := response.(*MethodNameResponse)
+						return &pb.MethodNameResponse{Result: resp.Result, Err: eutils.Err2Str(resp.Err)}, nil
+					},
+					func(_ context.Context, request interface{}) (interface{}, error) {
+						req := request.(*pb.MethodNameRequest)
+						return &MethodNameRequest{Param1: req.Param1}, nil
+					},
+					func(_ context.Context, response interface{}) (interface{}, error) {
+						resp := response.(*pb.MethodNameResponse)
+						return &MethodNameResponse{Result: resp.Result, Err: eutils.Str2Err(resp.Err)}, nil
+					},
+					pb.MethodNameResponse{},
 				},
 			),
 		),

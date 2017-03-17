@@ -15,13 +15,26 @@ type clientGRPC struct {
 func NewClient(serviceName string, t transportlayer.Endpoints, conn *grpc.ClientConn) transportlayer.Client {
 	methods := make(map[string]*grpctransport.Client)
 	for _, m := range t.Endpoints() {
+
+		var converterGRPC *EndpointConverterGRPC
+		for _, converter := range m.Converters() {
+			if c, ok := converter.(*EndpointConverterGRPC); ok {
+				converterGRPC = c
+				break
+			}
+		}
+
+		if converterGRPC == nil {
+			panic("GRPC converter not found")
+		}
+
 		methods[m.Name()] = grpctransport.NewClient(
 			conn,
 			serviceName,
 			m.Name(),
-			m.Encode().Request().(grpctransport.EncodeRequestFunc),
-			m.Decode().Response().(grpctransport.DecodeResponseFunc),
-			m.Reply(),
+			converterGRPC.EncodeReq,
+			converterGRPC.DecodeResp,
+			converterGRPC.ReplyType,
 		)
 	}
 	return &clientGRPC{methods: methods}

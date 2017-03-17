@@ -8,59 +8,33 @@ import (
 	gokitendpoint "github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/metrics"
-	grpctransport "github.com/go-kit/kit/transport/grpc"
 	"github.com/l-vitaly/eutils"
 )
-
-type endpointConverter struct {
-	req  interface{}
-	resp interface{}
-}
-
-func (mc endpointConverter) Request() interface{} {
-	return mc.req
-}
-
-func (mc endpointConverter) Response() interface{} {
-	return mc.resp
-}
 
 type Endpoint interface {
 	Name() string
 	Fn() gokitendpoint.Endpoint
-	Reply() interface{}
-	Encode() endpointConverter
-	Decode() endpointConverter
+	Converters() []interface{}
 }
 
 type EndpointOption func(*endpoint)
 
 type endpoint struct {
-	name   string
-	fn     gokitendpoint.Endpoint
-	decode endpointConverter
-	encode endpointConverter
-	reply  interface{}
+	name       string
+	fn         gokitendpoint.Endpoint
+	converters []interface{}
 }
 
-func NewEndpoint(name string, fn gokitendpoint.Endpoint, reply interface{}, options ...EndpointOption) Endpoint {
-	m := &endpoint{name: name, fn: fn, reply: reply}
+func NewEndpoint(name string, fn gokitendpoint.Endpoint, options ...EndpointOption) Endpoint {
+	m := &endpoint{name: name, fn: fn}
 	for _, option := range options {
 		option(m)
 	}
 	return m
 }
 
-func (m *endpoint) Reply() interface{} {
-	return m.reply
-}
-
-func (m *endpoint) Decode() endpointConverter {
-	return m.decode
-}
-
-func (m *endpoint) Encode() endpointConverter {
-	return m.encode
+func (m *endpoint) Converters() []interface{} {
+	return m.converters
 }
 
 func (m *endpoint) Fn() gokitendpoint.Endpoint {
@@ -71,15 +45,9 @@ func (m *endpoint) Name() string {
 	return m.name
 }
 
-func WithEncode(req grpctransport.EncodeRequestFunc, resp grpctransport.EncodeResponseFunc) EndpointOption {
+func WithConverter(c interface{}) EndpointOption {
 	return func(m *endpoint) {
-		m.encode = endpointConverter{req: req, resp: resp}
-	}
-}
-
-func WithDecode(req grpctransport.DecodeRequestFunc, resp grpctransport.DecodeResponseFunc) EndpointOption {
-	return func(m *endpoint) {
-		m.decode = endpointConverter{req: req, resp: resp}
+		m.converters = append(m.converters, c)
 	}
 }
 

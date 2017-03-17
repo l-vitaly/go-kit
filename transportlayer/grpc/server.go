@@ -16,10 +16,22 @@ func NewServer(endpoints transportlayer.Endpoints) transportlayer.Server {
 	methods := make(map[string]*grpctransport.Server)
 
 	for _, m := range endpoints.Endpoints() {
+		var converterGRPC *EndpointConverterGRPC
+		for _, converter := range m.Converters() {
+			if c, ok := converter.(*EndpointConverterGRPC); ok {
+				converterGRPC = c
+				break
+			}
+		}
+
+        if converterGRPC == nil {
+            panic("GRPC converter not found")
+        }
+
 		methods[m.Name()] = grpctransport.NewServer(
 			m.Fn(),
-			m.Decode().Request().(grpctransport.DecodeRequestFunc),
-			m.Encode().Response().(grpctransport.EncodeResponseFunc),
+			converterGRPC.DecodeReq,
+			converterGRPC.EncodeResp,
 		)
 	}
 	return &serverGRPC{methods: methods}

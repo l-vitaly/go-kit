@@ -1,7 +1,7 @@
 package transportlayer
 
 type Endpoints interface {
-	Endpoint(m Endpoint)
+	Endpoint(endpoints ...Endpoint)
 	Endpoints() []Endpoint
 }
 
@@ -17,6 +17,6 @@ func (t *endpoints) Endpoints() []Endpoint {
 	return t.endpoints
 }
 
-func (t *endpoints) Endpoint(m Endpoint) {
-	t.endpoints = append(t.endpoints, m)
+func (t *endpoints) Endpoint(endpoints ...Endpoint) {
+	t.endpoints = endpoints
 }
