@@ -1,13 +1,13 @@
 package grapql
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/log"
 	"github.com/graphql-go/graphql"
-	"golang.org/x/net/context"
 )
 
 type Server struct {

@@ -25,6 +25,7 @@ type endpoint struct {
 	name       string
 	fn         gokitendpoint.Endpoint
 	converters []interface{}
+
 }
 
 func NewEndpoint(name string, fn gokitendpoint.Endpoint, options ...EndpointOption) Endpoint {

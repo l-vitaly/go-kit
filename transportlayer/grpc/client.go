@@ -8,14 +8,30 @@ import (
 	"google.golang.org/grpc"
 )
 
+type ClientOption func(*clientGRPC)
+
 type clientGRPC struct {
+    options map[string][]grpctransport.ClientOption
 	methods map[string]*grpctransport.Client
 }
 
-func NewClient(serviceName string, conn *grpc.ClientConn, endpoints ...transportlayer.Endpoint) transportlayer.Client {
-	methods := make(map[string]*grpctransport.Client)
-	for _, m := range endpoints {
+func ClientGRPCOption(method string, o ...grpctransport.ClientOption) ClientOption {
+    return func(c *clientGRPC) {
+        c.options[method] = append(c.options[method], o...)
+    }
+}
 
+func NewClient(serviceName string, conn *grpc.ClientConn, endpoints []transportlayer.Endpoint, options ...ClientOption) transportlayer.Client {
+    c := &clientGRPC{
+        options: make(map[string][]grpctransport.ClientOption),
+        methods: make(map[string]*grpctransport.Client),
+    }
+
+    for _, option := range options {
+        option(c)
+    }
+
+	for _, m := range endpoints {
 		var converterGRPC *EndpointConverter
 		for _, converter := range m.Converters() {
 			if c, ok := converter.(*EndpointConverter); ok {
@@ -28,16 +44,25 @@ func NewClient(serviceName string, conn *grpc.ClientConn, endpoints ...transport
 			panic("GRPC converter not found")
 		}
 
-		methods[m.Name()] = grpctransport.NewClient(
+        var clientOptions []grpctransport.ClientOption
+        if options, ok := c.options[m.Name()]; ok {
+            clientOptions = options
+        }
+        if globalOpts, ok := c.options["*"]; ok {
+            clientOptions = append(clientOptions, globalOpts...)
+        }
+
+		c.methods[m.Name()] = grpctransport.NewClient(
 			conn,
 			serviceName,
 			m.Name(),
 			converterGRPC.EncodeReq,
 			converterGRPC.DecodeResp,
 			converterGRPC.ReplyType,
+            clientOptions...,
 		)
 	}
-	return &clientGRPC{methods: methods}
+	return c
 }
 
 func (t *clientGRPC) Call(ctx context.Context, request interface{}) (response interface{}, err error) {

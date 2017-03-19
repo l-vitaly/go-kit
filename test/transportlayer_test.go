@@ -107,7 +107,7 @@ func TestTransportLayer(t *testing.T) {
 		}
 
 		grpcs := grpc.NewServer()
-		pb.RegisterNameServer(grpcs, &server{transportgrpc.NewServer(endpoints...)})
+		pb.RegisterNameServer(grpcs, &server{transportgrpc.NewServer(endpoints)})
 
 		grpcs.Serve(listener)
 	}()
@@ -115,7 +115,7 @@ func TestTransportLayer(t *testing.T) {
 	conn, _ := grpc.Dial(":50505", grpc.WithInsecure())
 	defer conn.Close()
 
-	c := &client{transportgrpc.NewClient("Name", conn, endpoints...)}
+	c := &client{transportgrpc.NewClient("Name", conn, endpoints)}
 
 	res, err := c.MethodName(context.Background(), "")
 	u.AssertNotError(err, "Call MethodName")
