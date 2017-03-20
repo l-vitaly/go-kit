@@ -3,5 +3,6 @@ package grpc
 import "errors"
 
 var (
-	ErrEndpointNotFound = errors.New("endpoint not found")
+	ErrClientEndpointNotFound = errors.New("client endpoint not found")
+	ErrServerEndpointNotFound = errors.New("server endpoint not found")
 )

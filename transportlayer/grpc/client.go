@@ -11,25 +11,25 @@ import (
 type ClientOption func(*clientGRPC)
 
 type clientGRPC struct {
-    options map[string][]grpctransport.ClientOption
+	options map[string][]grpctransport.ClientOption
 	methods map[string]*grpctransport.Client
 }
 
 func ClientGRPCOption(method string, o ...grpctransport.ClientOption) ClientOption {
-    return func(c *clientGRPC) {
-        c.options[method] = append(c.options[method], o...)
-    }
+	return func(c *clientGRPC) {
+		c.options[method] = append(c.options[method], o...)
+	}
 }
 
 func NewClient(serviceName string, conn *grpc.ClientConn, endpoints []transportlayer.Endpoint, options ...ClientOption) transportlayer.Client {
-    c := &clientGRPC{
-        options: make(map[string][]grpctransport.ClientOption),
-        methods: make(map[string]*grpctransport.Client),
-    }
+	c := &clientGRPC{
+		options: make(map[string][]grpctransport.ClientOption),
+		methods: make(map[string]*grpctransport.Client),
+	}
 
-    for _, option := range options {
-        option(c)
-    }
+	for _, option := range options {
+		option(c)
+	}
 
 	for _, m := range endpoints {
 		var converterGRPC *EndpointConverter
@@ -44,13 +44,13 @@ func NewClient(serviceName string, conn *grpc.ClientConn, endpoints []transportl
 			panic("GRPC converter not found")
 		}
 
-        var clientOptions []grpctransport.ClientOption
-        if options, ok := c.options[m.Name()]; ok {
-            clientOptions = options
-        }
-        if globalOpts, ok := c.options["*"]; ok {
-            clientOptions = append(clientOptions, globalOpts...)
-        }
+		var clientOptions []grpctransport.ClientOption
+		if options, ok := c.options[m.Name()]; ok {
+			clientOptions = options
+		}
+		if globalOpts, ok := c.options["*"]; ok {
+			clientOptions = append(clientOptions, globalOpts...)
+		}
 
 		c.methods[m.Name()] = grpctransport.NewClient(
 			conn,
@@ -59,7 +59,7 @@ func NewClient(serviceName string, conn *grpc.ClientConn, endpoints []transportl
 			converterGRPC.EncodeReq,
 			converterGRPC.DecodeResp,
 			converterGRPC.ReplyType,
-            clientOptions...,
+			clientOptions...,
 		)
 	}
 	return c
@@ -70,5 +70,5 @@ func (t *clientGRPC) Call(ctx context.Context, request interface{}) (response in
 	if e, ok := t.methods[methodName]; ok {
 		return e.Endpoint()(ctx, request)
 	}
-	return ctx, ErrEndpointNotFound
+	return ctx, ErrClientEndpointNotFound
 }

@@ -66,5 +66,5 @@ func (t *serverGRPC) Serve(ctx context.Context, req interface{}) (context.Contex
 	if srv, ok := t.methods[methodName]; ok {
 		return srv.ServeGRPC(ctx, req)
 	}
-	return ctx, nil, ErrEndpointNotFound
+	return ctx, nil, ErrServerEndpointNotFound
 }
