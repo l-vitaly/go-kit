@@ -68,7 +68,7 @@ func (c Client) Endpoint() endpoint.Endpoint {
 			ctx = f(ctx)
 		}
 
-		out, err := c.client.Invoke(ctx, fmt.Sprint("%s.%s", c.serviceName, c.method), req, true, c.rmqReply)
+		out, err := c.client.Invoke(ctx, fmt.Sprintf("%s.%s", c.serviceName, c.method), req, true, c.rmqReply)
 		if err != nil {
 			return nil, fmt.Errorf("Exec: %v", err)
 		}
