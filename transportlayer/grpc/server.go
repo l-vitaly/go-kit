@@ -7,28 +7,28 @@ import (
 	"github.com/l-vitaly/go-kit/transportlayer"
 )
 
-type ServerOption func(*serverGRPC)
+type ServerOption func(*Server)
 
-type serverGRPC struct {
-    options map[string][]grpctransport.ServerOption
+type Server struct {
+	options map[string][]grpctransport.ServerOption
 	methods map[string]*grpctransport.Server
 }
 
 func ServerGRPCOption(method string, o ...grpctransport.ServerOption) ServerOption {
-    return func(s *serverGRPC) {
-        s.options[method] = append(s.options[method], o...)
-    }
+	return func(s *Server) {
+		s.options[method] = append(s.options[method], o...)
+	}
 }
 
-func NewServer(endpoints []transportlayer.Endpoint, options ...ServerOption) transportlayer.Server {
-    s := &serverGRPC{
-        options: make(map[string][]grpctransport.ServerOption),
-        methods: make(map[string]*grpctransport.Server),
-    }
+func NewServer(endpoints []transportlayer.Endpoint, options ...ServerOption) *Server {
+	s := &Server{
+		options: make(map[string][]grpctransport.ServerOption),
+		methods: make(map[string]*grpctransport.Server),
+	}
 
-    for _, option := range options {
-        option(s)
-    }
+	for _, option := range options {
+		option(s)
+	}
 
 	for _, m := range endpoints {
 		var converterGRPC *EndpointConverter
@@ -43,15 +43,15 @@ func NewServer(endpoints []transportlayer.Endpoint, options ...ServerOption) tra
 			panic("GRPC converter not found")
 		}
 
-        var serverOptions []grpctransport.ServerOption
-        if options, ok := s.options[m.Name()]; ok {
-            serverOptions = options
-        }
-        if globalOpts, ok := s.options["*"]; ok {
-            serverOptions = append(serverOptions, globalOpts...)
-        }
+		var serverOptions []grpctransport.ServerOption
+		if options, ok := s.options[m.Name()]; ok {
+			serverOptions = options
+		}
+		if globalOpts, ok := s.options["*"]; ok {
+			serverOptions = append(serverOptions, globalOpts...)
+		}
 
-        s.methods[m.Name()] = grpctransport.NewServer(
+		s.methods[m.Name()] = grpctransport.NewServer(
 			m.Fn(),
 			converterGRPC.DecodeReq,
 			converterGRPC.EncodeResp,
@@ -61,7 +61,7 @@ func NewServer(endpoints []transportlayer.Endpoint, options ...ServerOption) tra
 	return s
 }
 
-func (t *serverGRPC) Serve(ctx context.Context, req interface{}) (context.Context, interface{}, error) {
+func (t *Server) Serve(ctx context.Context, req interface{}) (context.Context, interface{}, error) {
 	methodName := transportlayer.GetCallerName()
 	if srv, ok := t.methods[methodName]; ok {
 		return srv.ServeGRPC(ctx, req)
