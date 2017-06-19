@@ -6,10 +6,13 @@ import (
 	jsonrpctransport "github.com/l-vitaly/go-kit/transport/jsonrpc"
 )
 
-type EndpointConverter struct {
-	EncodeReq  jsonrpctransport.EncodeRequestFunc
+type EndpointServerConverter struct {
 	EncodeResp jsonrpctransport.EncodeResponseFunc
 	DecodeReq  jsonrpctransport.DecodeRequestFunc
+}
+
+type EndpointClientConverter struct {
+	EncodeReq  jsonrpctransport.EncodeRequestFunc
 	DecodeResp jsonrpctransport.DecodeResponseFunc
 	ReplyType  reflect.Type
 }

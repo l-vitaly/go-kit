@@ -19,9 +19,9 @@ func NewClient(url string, serviceName string, endpoints []transportlayer.Endpoi
 	}
 
 	for _, m := range endpoints {
-		var converterJSONRPC *EndpointConverter
+		var converterJSONRPC *EndpointClientConverter
 		for _, converter := range m.Converters() {
-			if c, ok := converter.(*EndpointConverter); ok {
+			if c, ok := converter.(*EndpointClientConverter); ok {
 				converterJSONRPC = c
 				break
 			}

@@ -31,9 +31,9 @@ func NewServer(endpoints []transportlayer.Endpoint, options ...ServerOption) *Se
 	}
 
 	for _, m := range endpoints {
-		var converterJSONRPC *EndpointConverter
+		var converterJSONRPC *EndpointServerConverter
 		for _, converter := range m.Converters() {
-			if c, ok := converter.(*EndpointConverter); ok {
+			if c, ok := converter.(*EndpointServerConverter); ok {
 				converterJSONRPC = c
 				break
 			}
