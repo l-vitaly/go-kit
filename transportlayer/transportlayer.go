@@ -10,19 +10,19 @@ type EndpointFactory interface {
     CreateEndpoint(m string) gokit.Endpoint
 }
 
-type ConverterFactory interface {
-    CreateConverters(m string) []interface{}
+type OptionFactory interface {
+    CreateOptions(m string) []EndpointOption
 }
 
 type TransportLayer struct {
-    cf        ConverterFactory
+    of        OptionFactory
     ef        EndpointFactory
     endpoints []Endpoint
 }
 
-func NewTransportLayer(ef EndpointFactory, cf ConverterFactory) *TransportLayer {
+func NewTransportLayer(ef EndpointFactory, cf OptionFactory) *TransportLayer {
     return &TransportLayer{
-        cf: cf,
+        of: cf,
         ef: ef,
     }
 }
@@ -32,17 +32,11 @@ func (t *TransportLayer) RegisterService(svc interface{}) {
 
     for i := 0; i < svcType.NumMethod(); i++ {
         method := svcType.Method(i)
-
         // Method must be exported.
         if method.PkgPath != "" {
             continue
         }
-
-        t.endpoints = append(t.endpoints, &endpoint{
-            name:       method.Name,
-            fn:         t.ef.CreateEndpoint(method.Name),
-            converters: t.cf.CreateConverters(method.Name),
-        })
+        t.endpoints = append(t.endpoints, NewEndpoint(method.Name, t.ef.CreateEndpoint(method.Name), t.of.CreateOptions(method.Name)...))
     }
 }
 
