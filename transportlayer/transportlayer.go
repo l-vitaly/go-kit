@@ -1,45 +1,56 @@
 package transportlayer
 
 import (
-    "reflect"
+	"reflect"
 
-    gokit "github.com/go-kit/kit/endpoint"
+	gokit "github.com/go-kit/kit/endpoint"
 )
 
-type EndpointFactory interface {
-    CreateEndpoint(m string) gokit.Endpoint
+type EndpointFactory func(m string) gokit.Endpoint
+type OptionFactory func(m string) []EndpointOption
+
+type ServerTransportLayer struct {
+	endpoints []Endpoint
 }
 
-type OptionFactory interface {
-    CreateOptions(m string) []EndpointOption
+// NewServerTransportLayer
+func NewServerTransportLayer(s interface{}, ef EndpointFactory, of OptionFactory) *ServerTransportLayer {
+	tl := &ServerTransportLayer{}
+	sType := reflect.TypeOf(s)
+	for i := 0; i < sType.NumMethod(); i++ {
+		method := sType.Method(i)
+		// Method must be exported.
+		if method.PkgPath != "" {
+			continue
+		}
+		tl.endpoints = append(tl.endpoints, NewEndpoint(method.Name, ef(method.Name), of(method.Name)...))
+	}
+	return tl
 }
 
-type TransportLayer struct {
-    of        OptionFactory
-    ef        EndpointFactory
+func (t *ServerTransportLayer) GetEndpoints() []Endpoint {
+	return t.endpoints
+}
+
+type ClientTransportLayer struct {
     endpoints []Endpoint
 }
 
-func NewTransportLayer(ef EndpointFactory, cf OptionFactory) *TransportLayer {
-    return &TransportLayer{
-        of: cf,
-        ef: ef,
-    }
-}
-
-func (t *TransportLayer) RegisterService(svc interface{}) {
-    svcType := reflect.TypeOf(svc)
-
-    for i := 0; i < svcType.NumMethod(); i++ {
-        method := svcType.Method(i)
+// NewClientTransportLayer
+func NewClientTransportLayer(s interface{}, of OptionFactory) *ClientTransportLayer {
+    tl := &ClientTransportLayer{}
+    sType := reflect.TypeOf(s)
+    for i := 0; i < sType.NumMethod(); i++ {
+        method := sType.Method(i)
         // Method must be exported.
         if method.PkgPath != "" {
             continue
         }
-        t.endpoints = append(t.endpoints, NewEndpoint(method.Name, t.ef.CreateEndpoint(method.Name), t.of.CreateOptions(method.Name)...))
+        tl.endpoints = append(tl.endpoints, NewEndpoint(method.Name, nil, of(method.Name)...))
     }
+    return tl
 }
 
-func (t *TransportLayer) GetEndpoints() []Endpoint {
+func (t *ClientTransportLayer) GetEndpoints() []Endpoint {
     return t.endpoints
 }
