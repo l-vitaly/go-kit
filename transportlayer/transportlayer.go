@@ -6,8 +6,12 @@ import (
 	gokit "github.com/go-kit/kit/endpoint"
 )
 
-type EndpointFactory func(m string) gokit.Endpoint
-type OptionFactory func(m string) []EndpointOption
+type EndpointFactory interface {
+	CreateEndpoint(m string) gokit.Endpoint
+}
+type OptionFactory interface {
+	CreateOptions(m string) []EndpointOption
+}
 
 type ServerTransportLayer struct {
 	endpoints []Endpoint
@@ -23,7 +27,7 @@ func NewServerTransportLayer(s interface{}, ef EndpointFactory, of OptionFactory
 		if method.PkgPath != "" {
 			continue
 		}
-		tl.endpoints = append(tl.endpoints, NewEndpoint(method.Name, ef(method.Name), of(method.Name)...))
+		tl.endpoints = append(tl.endpoints, NewEndpoint(method.Name, ef.CreateEndpoint(method.Name), of.CreateOptions(method.Name)...))
 	}
 	return tl
 }
@@ -33,24 +37,24 @@ func (t *ServerTransportLayer) GetEndpoints() []Endpoint {
 }
 
 type ClientTransportLayer struct {
-    endpoints []Endpoint
+	endpoints []Endpoint
 }
 
 // NewClientTransportLayer
 func NewClientTransportLayer(s interface{}, of OptionFactory) *ClientTransportLayer {
-    tl := &ClientTransportLayer{}
-    sType := reflect.TypeOf(s)
-    for i := 0; i < sType.NumMethod(); i++ {
-        method := sType.Method(i)
-        // Method must be exported.
-        if method.PkgPath != "" {
-            continue
-        }
-        tl.endpoints = append(tl.endpoints, NewEndpoint(method.Name, nil, of(method.Name)...))
-    }
-    return tl
+	tl := &ClientTransportLayer{}
+	sType := reflect.TypeOf(s)
+	for i := 0; i < sType.NumMethod(); i++ {
+		method := sType.Method(i)
+		// Method must be exported.
+		if method.PkgPath != "" {
+			continue
+		}
+		tl.endpoints = append(tl.endpoints, NewEndpoint(method.Name, nil, of.CreateOptions(method.Name)...))
+	}
+	return tl
 }
 
 func (t *ClientTransportLayer) GetEndpoints() []Endpoint {
-    return t.endpoints
+	return t.endpoints
 }
