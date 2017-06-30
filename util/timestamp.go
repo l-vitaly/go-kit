@@ -24,5 +24,5 @@ func Time2Timestamp(t time.Time) *timestamp.Timestamp {
 		return &timestamp.Timestamp{}
 	}
 	sub := t.Sub(unixStart)
-	return &timestamp.Timestamp{Seconds: int64(sub.Seconds()), Nanos: int32(sub.Nanoseconds())}
+	return &timestamp.Timestamp{Seconds: int64(sub.Seconds()), Nanos: int32(t.Nanosecond())}
 }
