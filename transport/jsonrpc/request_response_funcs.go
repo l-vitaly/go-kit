@@ -1,8 +1,5 @@
 package jsonrpc
 
-import (
-	"context"
-	"net/http"
-)
+import "context"
 
-type ServerRequestFunc func(ctx context.Context, r *http.Request) context.Context
+type ServerRequestFunc func(ctx context.Context) context.Context
