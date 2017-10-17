@@ -1,28 +1,3 @@
-# GoKit
-
-Extending gokit libratry.
-
-## Install 
-
-``` bash
-go get -u github.com/go-kit/kit
-go get -u github.com/valyala/fasthttp
-go get -u github.com/qiangxue/fasthttp-routing
-```
-
-## Transport
-
-## RMQ RPC
-
-Coming Soon
-
-## JSON RPC
-
-Coming Soon
-
-### FastHttp
-
-``` golang
 package main
 
 import (
@@ -85,4 +60,3 @@ type helloRequest struct {
 type helloResponse struct {
 	Say string `json:"say"`
 }
-```

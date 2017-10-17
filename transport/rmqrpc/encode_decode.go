@@ -1,4 +1,4 @@
-package rmq
+package rmqrpc
 
 import "context"
 
