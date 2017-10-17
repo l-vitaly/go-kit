@@ -11,6 +11,10 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+const (
+	ContextKeyRouter contextKey = iota
+)
+
 // Server wraps an endpoint and implements http.Handler.
 type Server struct {
 	e            endpoint.Endpoint
@@ -76,16 +80,21 @@ func ServerErrorLogger(logger log.Logger) ServerOption {
 }
 
 func (s Server) RouterHandle() routing.Handler {
-	return func(ctx *routing.Context) error {
-		s.Handle(ctx.RequestCtx)
+	return func(rctx *routing.Context) error {
+		ctx := context.WithValue(context.TODO(), ContextKeyRouter, rctx)
+		s.Handle(ctx, rctx.RequestCtx)
 		return nil
 	}
 }
 
-// HandleFastHTTP implements fasthttp.HandleFastHTTP.
-func (s Server) Handle(rctx *fasthttp.RequestCtx) {
-	ctx := context.TODO()
+func (s Server) HandleWithoutContex() fasthttp.RequestHandler {
+	return func(rctx *fasthttp.RequestCtx) {
+		s.Handle(context.TODO(), rctx)
+	}
+}
 
+// HandleFastHTTP implements fasthttp.HandleFastHTTP.
+func (s Server) Handle(ctx context.Context, rctx *fasthttp.RequestCtx) {
 	for _, f := range s.before {
 		ctx = f(ctx, rctx)
 	}
