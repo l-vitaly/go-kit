@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/go-kit/kit/endpoint"
 	"github.com/valyala/fasthttp"
@@ -13,13 +14,14 @@ import (
 
 // Client wraps a URL and provides a method that implements endpoint.Endpoint.
 type Client struct {
-	client *fasthttp.Client
-	method string
-	tgt    *url.URL
-	enc    EncodeRequestFunc
-	dec    DecodeResponseFunc
-	before []ClientRequestFunc
-	after  []ClientResponseFunc
+	client  *fasthttp.Client
+	method  string
+	tgt     *url.URL
+	timeout time.Duration
+	enc     EncodeRequestFunc
+	dec     DecodeResponseFunc
+	before  []ClientRequestFunc
+	after   []ClientResponseFunc
 }
 
 // NewClient constructs a usable Client for a single remote method.
@@ -52,6 +54,11 @@ type ClientOption func(*Client)
 // By default, http.DefaultClient is used.
 func SetClient(client *fasthttp.Client) ClientOption {
 	return func(c *Client) { c.client = client }
+}
+
+// SetClientTimeout sets the client request timeout .
+func SetClientTimeout(timeout time.Duration) ClientOption {
+	return func(c *Client) { c.timeout = timeout }
 }
 
 // ClientBefore sets the RequestFuncs that are applied to the outgoing HTTP
