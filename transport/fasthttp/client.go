@@ -87,7 +87,10 @@ func (c Client) Endpoint() endpoint.Endpoint {
 		req := fasthttp.AcquireRequest()
 		req.SetRequestURI(c.tgt.String())
 		req.Header.SetMethod(strings.ToUpper(c.method))
+		defer fasthttp.ReleaseRequest(req)
+
 		resp := fasthttp.AcquireResponse()
+		defer fasthttp.ReleaseResponse(resp)
 
 		if err = c.enc(ctx, req, request); err != nil {
 			return nil, err
