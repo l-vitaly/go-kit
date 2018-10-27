@@ -4,11 +4,9 @@
 
 ## Usage
 
-A simple max retry.
+Max retry.
 
 ```go
-...
-
 func NewGRPCClient(conn *grpc.ClientConn) Service {
 
     var incrEndpoint endpoint.Endpoint
@@ -23,7 +21,27 @@ func NewGRPCClient(conn *grpc.ClientConn) Service {
 			options...,
 		).Endpoint()
 	}
-	incrEndpoint = retry.Retry(100*time.Millisecond, incrEndpoint, MaxRetries(10))
+	incrEndpoint = retry.MakeEndpoint(100*time.Millisecond, incrEndpoint, retry.Max(10))
 }
-...
+```
+
+Always retry.
+
+```go
+func NewGRPCClient(conn *grpc.ClientConn) Service {
+
+    var incrEndpoint endpoint.Endpoint
+	{
+		incrEndpoint = grpctransport.NewClient(
+			conn,
+			"service.Service",
+			"Incr",
+			encodeGRPCIncrRequest,
+			decodeGRPCIncrResponse,
+			pb.IncrResponse{},
+			options...,
+		).Endpoint()
+	}
+	incrEndpoint = retry.MakeEndpoint(100*time.Millisecond, incrEndpoint, retry.Always())
+}
 ```
