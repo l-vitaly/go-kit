@@ -13,6 +13,7 @@ require (
 	github.com/l-vitaly/rmqrpc v0.0.0-20170301101204-95b1ce811f78
 	github.com/nats-io/nats.go v1.9.1
 	github.com/opentracing/opentracing-go v1.1.0
+	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7
 	github.com/qiangxue/fasthttp-routing v0.0.0-20160225050629-6ccdc2a18d87
 	github.com/stretchr/testify v1.5.1 // indirect
 	github.com/ugorji/go v1.1.7 // indirect

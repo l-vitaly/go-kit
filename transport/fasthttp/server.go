@@ -101,15 +101,15 @@ func (s Server) Handle(ctx context.Context, rctx *fasthttp.RequestCtx) {
 
 	request, err := s.dec(ctx, &rctx.Request)
 	if err != nil {
-		s.logger.Log("err", err)
-		s.errorEncoder(ctx, err, &rctx.Response)
+		_ = s.logger.Log("err", err)
+		s.errorEncoder(ctx, err, rctx)
 		return
 	}
 
 	response, err := s.e(ctx, request)
 	if err != nil {
-		s.logger.Log("err", err)
-		s.errorEncoder(ctx, err, &rctx.Response)
+		_ = s.logger.Log("err", err)
+		s.errorEncoder(ctx, err, rctx)
 		return
 	}
 
@@ -118,8 +118,8 @@ func (s Server) Handle(ctx context.Context, rctx *fasthttp.RequestCtx) {
 	}
 
 	if err := s.enc(ctx, &rctx.Response, response); err != nil {
-		s.logger.Log("err", err)
-		s.errorEncoder(ctx, err, &rctx.Response)
+		_ = s.logger.Log("err", err)
+		s.errorEncoder(ctx, err, rctx)
 		return
 	}
 }
@@ -128,7 +128,7 @@ func (s Server) Handle(ctx context.Context, rctx *fasthttp.RequestCtx) {
 // Users are encouraged to use custom ErrorEncoders to encode HTTP errors to
 // their clients, and will likely want to pass and check for their own error
 // types. See the example shipping/handling service.
-type ErrorEncoder func(ctx context.Context, err error, rctx *fasthttp.Response)
+type ErrorEncoder func(ctx context.Context, err error, rctx *fasthttp.RequestCtx)
 
 // EncodeJSONResponse is a EncodeResponseFunc that serializes the response as a
 // JSON object to the ResponseWriter. Many JSON-over-HTTP services can use it as
@@ -165,25 +165,25 @@ func EncodeJSONResponse(_ context.Context, r *fasthttp.Response, response interf
 // the marshaling succeeds, a content type of application/json and the JSON
 // encoded form of the error will be used. If the error implements StatusCoder,
 // the provided StatusCode will be used instead of 500.
-func DefaultErrorEncoder(_ context.Context, err error, r *fasthttp.Response) {
+func DefaultErrorEncoder(_ context.Context, err error, rctx *fasthttp.RequestCtx) {
 	contentType, body := "text/plain; charset=utf-8", []byte(err.Error())
 	if marshaler, ok := err.(json.Marshaler); ok {
 		if jsonBody, marshalErr := marshaler.MarshalJSON(); marshalErr == nil {
 			contentType, body = "application/json; charset=utf-8", jsonBody
 		}
 	}
-	r.Header.Set("Content-Type", contentType)
+	rctx.Response.Header.Set("Content-Type", contentType)
 	if headerer, ok := err.(Headerer); ok {
 		for k, v := range headerer.Headers() {
-			r.Header.Set(k, v)
+			rctx.Response.Header.Set(k, v)
 		}
 	}
 	code := http.StatusInternalServerError
 	if sc, ok := err.(StatusCoder); ok {
 		code = sc.StatusCode()
 	}
-	r.SetStatusCode(code)
-	r.SetBody(body)
+	rctx.SetStatusCode(code)
+	_, _ = rctx.Write(body)
 }
 
 // StatusCoder is checked by DefaultErrorEncoder. If an error value implements

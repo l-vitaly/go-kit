@@ -10,6 +10,12 @@ import (
 // request context. In Servers, RequestFuncs are executed prior to invoking the
 // endpoint. In Clients, RequestFuncs are executed after creating the request
 // but prior to invoking the HTTP client.
+type RequestFunc func(context.Context, *fasthttp.Request) context.Context
+
+// RequestFunc may take information from an HTTP request and put it into a
+// request context. In Servers, RequestFuncs are executed prior to invoking the
+// endpoint. In Clients, RequestFuncs are executed after creating the request
+// but prior to invoking the HTTP client.
 type ServerRequestFunc func(context.Context, *fasthttp.RequestCtx) context.Context
 
 // ServerResponseFunc may take information from a request context and use it to
