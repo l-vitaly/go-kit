@@ -16,10 +16,6 @@ go get -u github.com/qiangxue/fasthttp-routing
 
 Coming Soon
 
-## JSON RPC
-
-Coming Soon
-
 ### FastHttp
 
 ``` golang
