@@ -6,11 +6,10 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/go-kit/kit/log"
+	"github.com/pquerna/ffjson/ffjson"
 	"github.com/valyala/fasthttp"
 
-	"github.com/pquerna/ffjson/ffjson"
-
-	"github.com/go-kit/kit/log"
 	fasthttptransport "github.com/l-vitaly/go-kit/transport/fasthttp"
 )
 
@@ -73,8 +72,7 @@ func ServerErrorLogger(logger log.Logger) ServerOption {
 
 // ServeHTTP implements http.Handler.
 func (s Server) ServeFastHTTP(rctx *fasthttp.RequestCtx) {
-
-	if string(rctx.Method()) != fasthttp.MethodGet {
+	if string(rctx.Method()) != fasthttp.MethodPost {
 		rctx.Response.Header.Set("Content-Type", "text/plain; charset=utf-8")
 		rctx.SetStatusCode(http.StatusMethodNotAllowed)
 		_, _ = io.WriteString(rctx, "405 must POST\n")
