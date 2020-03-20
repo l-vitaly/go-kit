@@ -1,41 +1,18 @@
 package jsonrpc
 
 import (
-	"errors"
+	"encoding/json"
 
 	"github.com/pquerna/ffjson/ffjson"
 )
 
-// RawMessage is a raw encoded JSON value.
-// It implements Marshaler and Unmarshaler and can
-// be used to delay JSON decoding or precomputed a JSON encoding.
-// ffjson: skip
-type RawMessage []byte
-
-// MarshalJSON returns m as the JSON encoding of m.
-func (m RawMessage) MarshalJSON() ([]byte, error) {
-	if m == nil {
-		return []byte("null"), nil
-	}
-	return m, nil
-}
-
-// UnmarshalJSON sets *m to a copy of data.
-func (m *RawMessage) UnmarshalJSON(data []byte) error {
-	if m == nil {
-		return errors.New("ffjson.RawMessage: UnmarshalJSON on nil pointer")
-	}
-	*m = append((*m)[0:0], data...)
-	return nil
-}
-
 // Request defines a JSON RPC request from the spec
 // http://www.jsonrpc.org/specification#request_object
 type Request struct {
-	JSONRPC string     `json:"jsonrpc"`
-	Method  string     `json:"method"`
-	Params  RawMessage `json:"params"`
-	ID      *RequestID `json:"id"`
+	JSONRPC string          `json:"jsonrpc"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
+	ID      *RequestID      `json:"id"`
 }
 
 // RequestID defines a request ID that can be string, number, or null.
@@ -94,10 +71,10 @@ func (id *RequestID) String() (string, error) {
 // Response defines a JSON RPC response from the spec
 // http://www.jsonrpc.org/specification#response_object
 type Response struct {
-	JSONRPC string     `json:"jsonrpc"`
-	Result  RawMessage `json:"result,omitempty"`
-	Error   *Error     `json:"error,omitempty"`
-	ID      *RequestID `json:"id"`
+	JSONRPC string          `json:"jsonrpc"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *Error          `json:"error,omitempty"`
+	ID      *RequestID      `json:"id"`
 }
 
 const (

@@ -1,6 +1,8 @@
 package jsonrpc
 
 import (
+	"encoding/json"
+
 	"github.com/go-kit/kit/endpoint"
 
 	"context"
@@ -22,13 +24,13 @@ type EndpointCodecMap map[string]EndpointCodec
 // It's designed to be used in JSON RPC servers, for server-side endpoints.
 // One straightforward DecodeRequestFunc could be something that unmarshals
 // JSON from the request body to the concrete request type.
-type DecodeRequestFunc func(context.Context, RawMessage) (request interface{}, err error)
+type DecodeRequestFunc func(context.Context, json.RawMessage) (request interface{}, err error)
 
 // EncodeResponseFunc encodes the passed response object to a JSON RPC result.
 // It's designed to be used in HTTP servers, for server-side endpoints.
 // One straightforward EncodeResponseFunc could be something that JSON encodes
 // the object directly.
-type EncodeResponseFunc func(context.Context, interface{}) (response RawMessage, err error)
+type EncodeResponseFunc func(context.Context, interface{}) (response json.RawMessage, err error)
 
 // Client-Side Codec
 
@@ -36,7 +38,7 @@ type EncodeResponseFunc func(context.Context, interface{}) (response RawMessage,
 // It's designed to be used in JSON RPC clients, for client-side
 // endpoints. One straightforward EncodeResponseFunc could be something that
 // JSON encodes the object directly.
-type EncodeRequestFunc func(context.Context, interface{}) (request RawMessage, err error)
+type EncodeRequestFunc func(context.Context, interface{}) (request json.RawMessage, err error)
 
 // DecodeResponseFunc extracts a user-domain response object from an JSON RPC
 // response object. It's designed to be used in JSON RPC clients, for

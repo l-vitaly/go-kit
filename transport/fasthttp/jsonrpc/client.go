@@ -2,6 +2,7 @@ package jsonrpc
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"sync/atomic"
 
@@ -31,10 +32,10 @@ type Client struct {
 }
 
 type clientRequest struct {
-	JSONRPC string      `json:"jsonrpc"`
-	Method  string      `json:"method"`
-	Params  RawMessage  `json:"params"`
-	ID      interface{} `json:"id"`
+	JSONRPC string          `json:"jsonrpc"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
+	ID      interface{}     `json:"id"`
 }
 
 // NewClient constructs a usable Client for a single remote method.
@@ -59,7 +60,7 @@ func NewClient(
 }
 
 // DefaultRequestEncoder marshals the given request to JSON.
-func DefaultRequestEncoder(_ context.Context, req interface{}) (RawMessage, error) {
+func DefaultRequestEncoder(_ context.Context, req interface{}) (json.RawMessage, error) {
 	return ffjson.Marshal(req)
 }
 
@@ -139,7 +140,7 @@ func (c Client) Endpoint() endpoint.Endpoint {
 			err error
 		)
 
-		var params RawMessage
+		var params json.RawMessage
 		if params, err = c.enc(ctx, request); err != nil {
 			return nil, err
 		}

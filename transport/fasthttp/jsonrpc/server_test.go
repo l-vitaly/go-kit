@@ -38,8 +38,8 @@ func expectErrorCode(t *testing.T, want int, body []byte) {
 	}
 }
 
-func nopDecoder(context.Context, jsonrpc.RawMessage) (interface{}, error) { return struct{}{}, nil }
-func nopEncoder(context.Context, interface{}) (jsonrpc.RawMessage, error) { return []byte("[]"), nil }
+func nopDecoder(context.Context, json.RawMessage) (interface{}, error) { return struct{}{}, nil }
+func nopEncoder(context.Context, interface{}) (json.RawMessage, error) { return []byte("[]"), nil }
 
 type mockLogger struct {
 	Called   bool
@@ -56,7 +56,7 @@ func TestServerBadDecode(t *testing.T) {
 	ecm := jsonrpc.EndpointCodecMap{
 		"add": jsonrpc.EndpointCodec{
 			Endpoint: endpoint.Nop,
-			Decode:   func(context.Context, jsonrpc.RawMessage) (interface{}, error) { return struct{}{}, errors.New("oof") },
+			Decode:   func(context.Context, json.RawMessage) (interface{}, error) { return struct{}{}, errors.New("oof") },
 			Encode:   nopEncoder,
 		},
 	}
@@ -86,6 +86,7 @@ func TestServerBadDecode(t *testing.T) {
 	}()
 
 	req.SetRequestURI("http://example.com")
+	req.Header.SetMethod(fasthttp.MethodPost)
 	req.SetBody(addBody())
 
 	if err := c.Do(req, resp); err != nil {
