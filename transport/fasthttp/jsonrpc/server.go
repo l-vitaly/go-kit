@@ -106,9 +106,11 @@ func (s Server) ServeFastHTTP(rctx *fasthttp.RequestCtx) {
 	// Get JSON RPC method from URI.
 	// Note: the method in the uri has priority.
 	parts := strings.Split(string(rctx.Request.URI().Path()), "/")
-	uriMethod := parts[len(parts)]
-	if uriMethod != "" {
-		req.Method = uriMethod
+	if len(parts) > 0 {
+		uriMethod := parts[len(parts)]
+		if uriMethod != "" {
+			req.Method = uriMethod
+		}
 	}
 
 	// Get the endpoint and codecs from the map using the method
