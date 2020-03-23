@@ -108,7 +108,7 @@ func (s Server) ServeFastHTTP(rctx *fasthttp.RequestCtx) {
 	parts := strings.Split(string(rctx.Request.URI().Path()), "/")
 	if len(parts) > 0 {
 		uriMethod := parts[len(parts)-1]
-		if uriMethod != "" {
+		if req.Method == "" && uriMethod != "" {
 			req.Method = uriMethod
 		}
 	}
