@@ -107,7 +107,7 @@ func (s Server) ServeFastHTTP(rctx *fasthttp.RequestCtx) {
 	// Note: the method in the uri has priority.
 	parts := strings.Split(string(rctx.Request.URI().Path()), "/")
 	if len(parts) > 0 {
-		uriMethod := parts[len(parts)]
+		uriMethod := parts[len(parts)-1]
 		if uriMethod != "" {
 			req.Method = uriMethod
 		}
