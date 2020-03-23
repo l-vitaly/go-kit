@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/go-kit/kit/log"
 	"github.com/pquerna/ffjson/ffjson"
@@ -100,6 +101,14 @@ func (s Server) ServeFastHTTP(rctx *fasthttp.RequestCtx) {
 		_ = s.logger.Log("err", rpcerr)
 		s.errorEncoder(ctx, rpcerr, rctx)
 		return
+	}
+
+	// Get JSON RPC method from URI.
+	// Note: the method in the uri has priority.
+	parts := strings.Split(string(rctx.Request.URI().Path()), "/")
+	uriMethod := parts[len(parts)]
+	if uriMethod != "" {
+		req.Method = uriMethod
 	}
 
 	// Get the endpoint and codecs from the map using the method

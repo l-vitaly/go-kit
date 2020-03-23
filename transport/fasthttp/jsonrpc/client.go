@@ -15,7 +15,7 @@ import (
 
 // Client wraps a JSON RPC method and provides a method that implements endpoint.Endpoint.
 type Client struct {
-	//client fasthttptransport.FastHTTPClient
+	client fasthttptransport.FastHTTPClient
 
 	// JSON RPC endpoint URL
 	tgt *url.URL
@@ -81,11 +81,11 @@ func DefaultResponseDecoder(_ context.Context, res Response) (interface{}, error
 // ClientOption sets an optional parameter for clients.
 type ClientOption func(*Client)
 
-// SetClient sets the underlying HTTP client used for requests.
+// SetClient sets the underlying FastHTTP client used for requests.
 // By default, http.DefaultClient is used.
-//func SetClient(client fasthttptransport.FastHTTPClient) ClientOption {
-//	return func(c *Client) { c.client = client }
-//}
+func SetClient(client fasthttptransport.FastHTTPClient) ClientOption {
+	return func(c *Client) { c.client = client }
+}
 
 // ClientBefore sets the RequestFuncs that are applied to the outgoing HTTP
 // request before it's invoked.
@@ -172,7 +172,11 @@ func (c Client) Endpoint() endpoint.Endpoint {
 			ctx = f(ctx, req)
 		}
 
-		err = fasthttp.Do(req, resp)
+		if c.client != nil {
+			err = c.client.Do(req, resp)
+		} else {
+			err = fasthttp.Do(req, resp)
+		}
 		if err != nil {
 			return nil, err
 		}

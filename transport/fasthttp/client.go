@@ -13,7 +13,7 @@ import (
 )
 
 type FastHTTPClient interface {
-	Do(req *fasthttp.Request) (*fasthttp.Response, error)
+	Do(req *fasthttp.Request, resp *fasthttp.Response) error
 }
 
 // Client wraps a URL and provides a method that implements endpoint.Endpoint.
