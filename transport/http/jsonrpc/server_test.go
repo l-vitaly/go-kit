@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/endpoint"
-	"github.com/go-kit/kit/transport/http/jsonrpc"
+	"github.com/l-vitaly/go-kit/transport/http/jsonrpc"
 )
 
 func addBody() io.Reader {
@@ -25,6 +25,11 @@ func body(in string) io.Reader {
 }
 
 func unmarshalResponse(body []byte) (resp jsonrpc.Response, err error) {
+	err = json.Unmarshal(body, &resp)
+	return
+}
+
+func unmarshalResponses(body []byte) (resp []jsonrpc.Response, err error) {
 	err = json.Unmarshal(body, &resp)
 	return
 }
@@ -125,6 +130,7 @@ func TestServerBadEndpoint(t *testing.T) {
 		t.Errorf("want %d, have %d", want, have)
 	}
 	buf, _ := ioutil.ReadAll(resp.Body)
+	t.Log(string(buf))
 	expectErrorCode(t, jsonrpc.InternalError, buf)
 	expectValidRequestID(t, 1, buf)
 }
@@ -147,33 +153,6 @@ func TestServerBadEncode(t *testing.T) {
 	buf, _ := ioutil.ReadAll(resp.Body)
 	expectErrorCode(t, jsonrpc.InternalError, buf)
 	expectValidRequestID(t, 1, buf)
-}
-
-func TestServerErrorEncoder(t *testing.T) {
-	errTeapot := errors.New("teapot")
-	code := func(err error) int {
-		if err == errTeapot {
-			return http.StatusTeapot
-		}
-		return http.StatusInternalServerError
-	}
-	ecm := jsonrpc.EndpointCodecMap{
-		"add": jsonrpc.EndpointCodec{
-			Endpoint: func(context.Context, interface{}) (interface{}, error) { return struct{}{}, errTeapot },
-			Decode:   nopDecoder,
-			Encode:   nopEncoder,
-		},
-	}
-	handler := jsonrpc.NewServer(
-		ecm,
-		jsonrpc.ServerErrorEncoder(func(_ context.Context, err error, w http.ResponseWriter) { w.WriteHeader(code(err)) }),
-	)
-	server := httptest.NewServer(handler)
-	defer server.Close()
-	resp, _ := http.Post(server.URL, "application/json", addBody())
-	if want, have := http.StatusTeapot, resp.StatusCode; want != have {
-		t.Errorf("want %d, have %d", want, have)
-	}
 }
 
 func TestCanRejectNonPostRequest(t *testing.T) {
@@ -218,6 +197,7 @@ func TestServerHappyPath(t *testing.T) {
 	step, response := testServer(t)
 	step()
 	resp := <-response
+
 	defer resp.Body.Close() // nolint
 	buf, _ := ioutil.ReadAll(resp.Body)
 	if want, have := http.StatusOK, resp.StatusCode; want != have {
@@ -232,6 +212,32 @@ func TestServerHappyPath(t *testing.T) {
 	}
 	if r.Error != nil {
 		t.Fatalf("Unxpected error on response: %s", buf)
+	}
+}
+
+func TestServerBatchHappyPath(t *testing.T) {
+	step, response := testServerForBatch(t)
+	step()
+	step()
+	resp := <-response
+
+	defer resp.Body.Close() // nolint
+	buf, _ := ioutil.ReadAll(resp.Body)
+	if want, have := http.StatusOK, resp.StatusCode; want != have {
+		t.Errorf("want %d, have %d (%s)", want, have, buf)
+	}
+	res, err := unmarshalResponses(buf)
+	if err != nil {
+		t.Fatalf("Can't decode response. err=%s, body=%s", err, buf)
+	}
+
+	for _, r := range res {
+		if r.JSONRPC != jsonrpc.Version {
+			t.Fatalf("JSONRPC Version: want=%s, got=%s", jsonrpc.Version, r.JSONRPC)
+		}
+		if r.Error != nil {
+			t.Fatalf("Unxpected error on response: %s", buf)
+		}
 	}
 }
 
@@ -360,6 +366,46 @@ func testServer(t *testing.T) (step func(), resp <-chan *http.Response) {
 		server := httptest.NewServer(handler)
 		defer server.Close()
 		rb := strings.NewReader(`{"jsonrpc": "2.0", "method": "add", "params": [3, 2], "id": 1}`)
+		resp, err := http.Post(server.URL, "application/json", rb)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		response <- resp
+	}()
+	return func() { stepch <- true }, response
+}
+
+func testServerForBatch(t *testing.T) (step func(), resp <-chan *http.Response) {
+	var (
+		stepch      = make(chan bool)
+		endpointAdd = func(ctx context.Context, request interface{}) (response interface{}, err error) {
+			<-stepch
+			return struct{}{}, nil
+		}
+		endpointDelete = func(ctx context.Context, request interface{}) (response interface{}, err error) {
+			<-stepch
+			return struct{}{}, nil
+		}
+		response = make(chan *http.Response)
+		ecm      = jsonrpc.EndpointCodecMap{
+			"add": jsonrpc.EndpointCodec{
+				Endpoint: endpointAdd,
+				Decode:   nopDecoder,
+				Encode:   nopEncoder,
+			},
+			"delete": jsonrpc.EndpointCodec{
+				Endpoint: endpointDelete,
+				Decode:   nopDecoder,
+				Encode:   nopEncoder,
+			},
+		}
+		handler = jsonrpc.NewServer(ecm)
+	)
+	go func() {
+		server := httptest.NewServer(handler)
+		defer server.Close()
+		rb := strings.NewReader(`[{"jsonrpc": "2.0", "method": "add", "params": [3, 2], "id": 1}, {"jsonrpc": "2.0", "method": "delete", "params": [3, 2], "id": 1}]`)
 		resp, err := http.Post(server.URL, "application/json", rb)
 		if err != nil {
 			t.Error(err)

@@ -24,7 +24,7 @@ func TestServerBadDecode(t *testing.T) {
 	l := fasthttputil.NewInmemoryListener()
 	defer l.Close()
 
-	go fasthttp.Serve(l, s.Handle)
+	go fasthttp.Serve(l, s.HandleWithoutContex())
 
 	c, err := l.Dial()
 	if err != nil {
@@ -54,7 +54,7 @@ func TestServerBadEndpoint(t *testing.T) {
 	l := fasthttputil.NewInmemoryListener()
 	defer l.Close()
 
-	go fasthttp.Serve(l, s.Handle)
+	go fasthttp.Serve(l, s.HandleWithoutContex())
 
 	c, err := l.Dial()
 	if err != nil {
@@ -85,7 +85,7 @@ func TestServerBadEncode(t *testing.T) {
 	l := fasthttputil.NewInmemoryListener()
 	defer l.Close()
 
-	go fasthttp.Serve(l, s.Handle)
+	go fasthttp.Serve(l, s.HandleWithoutContex())
 
 	c, err := l.Dial()
 	if err != nil {
@@ -118,13 +118,13 @@ func TestServerErrorEncoder(t *testing.T) {
 		func(context.Context, interface{}) (interface{}, error) { return struct{}{}, errTeapot },
 		func(context.Context, *fasthttp.Request) (interface{}, error) { return struct{}{}, nil },
 		func(context.Context, *fasthttp.Response, interface{}) error { return nil },
-		httptransport.ServerErrorEncoder(func(_ context.Context, err error, rctx *fasthttp.Response) { rctx.SetStatusCode(code(err)) }),
+		httptransport.ServerErrorEncoder(func(ctx context.Context, err error, rctx *fasthttp.RequestCtx) { rctx.SetStatusCode(code(err)) }),
 	)
 
 	l := fasthttputil.NewInmemoryListener()
 	defer l.Close()
 
-	go fasthttp.Serve(l, s.Handle)
+	go fasthttp.Serve(l, s.HandleWithoutContex())
 
 	c, err := l.Dial()
 	if err != nil {
@@ -171,7 +171,7 @@ func testServer(t *testing.T) (step func(), resp <-chan *fasthttp.Response) {
 		l := fasthttputil.NewInmemoryListener()
 		defer l.Close()
 
-		go fasthttp.Serve(l, s.Handle)
+		go fasthttp.Serve(l, s.HandleWithoutContex())
 
 		c, err := l.Dial()
 		if err != nil {

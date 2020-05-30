@@ -1,10 +1,12 @@
 package jsonrpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -14,16 +16,17 @@ import (
 
 type requestIDKeyType struct{}
 
-var requestIDKey requestIDKeyType
+var RequestIDKey requestIDKeyType
 
 // Server wraps an endpoint and implements http.Handler.
 type Server struct {
-	ecm          EndpointCodecMap
-	before       []httptransport.RequestFunc
-	after        []httptransport.ServerResponseFunc
-	errorEncoder httptransport.ErrorEncoder
-	finalizer    httptransport.ServerFinalizerFunc
-	logger       log.Logger
+	ecm            EndpointCodecMap
+	before         []httptransport.RequestFunc
+	after          []httptransport.ServerResponseFunc
+	errorEncoder   ErrorEncoder
+	responseWriter ResponseWriter
+	finalizer      httptransport.ServerFinalizerFunc
+	logger         log.Logger
 }
 
 // NewServer constructs a new server, which implements http.Server.
@@ -32,9 +35,10 @@ func NewServer(
 	options ...ServerOption,
 ) *Server {
 	s := &Server{
-		ecm:          ecm,
-		errorEncoder: DefaultErrorEncoder,
-		logger:       log.NewNopLogger(),
+		ecm:            ecm,
+		errorEncoder:   DefaultErrorEncoder,
+		responseWriter: DefaultResponseWriter,
+		logger:         log.NewNopLogger(),
 	}
 	for _, option := range options {
 		option(s)
@@ -61,8 +65,13 @@ func ServerAfter(after ...httptransport.ServerResponseFunc) ServerOption {
 // whenever they're encountered in the processing of a request. Clients can
 // use this to provide custom error formatting and response codes. By default,
 // errors will be written with the DefaultErrorEncoder.
-func ServerErrorEncoder(ee httptransport.ErrorEncoder) ServerOption {
+func ServerErrorEncoder(ee ErrorEncoder) ServerOption {
 	return func(s *Server) { s.errorEncoder = ee }
+}
+
+// ServerResponseWriter ...
+func ServerResponseWriter(rw ResponseWriter) ServerOption {
+	return func(s *Server) { s.responseWriter = rw }
 }
 
 // ServerErrorLogger is used to log non-terminal errors. By default, no errors
@@ -73,6 +82,15 @@ func ServerErrorEncoder(ee httptransport.ErrorEncoder) ServerOption {
 func ServerErrorLogger(logger log.Logger) ServerOption {
 	return func(s *Server) { s.logger = logger }
 }
+
+// ErrorEncoder is responsible for encoding an error to the ResponseWriter.
+// Users are encouraged to use custom ErrorEncoders to encode HTTP errors to
+// their clients, and will likely want to pass and check for their own error
+// types. See the example shipping/handling service.
+type ErrorEncoder func(ctx context.Context, err error) Response
+
+// ResponseWriter ...
+type ResponseWriter func(ctx context.Context, responses []Response, isBatch bool, w http.ResponseWriter)
 
 // ServerFinalizer is executed at the end of every HTTP request.
 // By default, no finalizer is registered.
@@ -100,75 +118,120 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx = f(ctx, r)
 	}
 
-	// Decode the body into an  object
-	var req Request
-	err := json.NewDecoder(r.Body).Decode(&req)
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		rpcerr := parseError("JSON could not be read body: " + err.Error())
+		s.logger.Log("err", rpcerr)
+		s.responseWriter(ctx, []Response{s.errorEncoder(ctx, rpcerr)}, false, w)
+		return
+	}
+
+	isBatch := true
+	if !bytes.HasPrefix(body, []byte("[")) && !bytes.HasSuffix(body, []byte("]")) {
+		isBatch = false
+
+		buf := new(bytes.Buffer)
+		buf.WriteString("[")
+		buf.Write(body)
+		buf.WriteString("]")
+
+		body = buf.Bytes()
+	}
+
+	// Decode the body into an object
+	var reqs []Request
+	err = json.Unmarshal(body, &reqs)
 	if err != nil {
 		rpcerr := parseError("JSON could not be decoded: " + err.Error())
 		s.logger.Log("err", rpcerr)
-		s.errorEncoder(ctx, rpcerr, w)
+		s.responseWriter(ctx, []Response{s.errorEncoder(ctx, rpcerr)}, isBatch, w)
 		return
 	}
 
-	ctx = context.WithValue(ctx, requestIDKey, req.ID)
+	responses := make(chan Response, len(reqs))
 
-	// Get JSON RPC method from URI.
-	// Note: the method in the uri has priority.
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) > 0 {
-		uriMethod := parts[len(parts)-1]
-		if req.Method == "" && uriMethod != "" {
-			req.Method = uriMethod
+	for _, req := range reqs {
+		ctx = context.WithValue(ctx, RequestIDKey, req.ID)
+
+		if !isBatch {
+			// Get JSON RPC method from URI.
+			// Note: the method in the uri has priority.
+			parts := strings.Split(r.URL.Path, "/")
+			if len(parts) > 0 {
+				uriMethod := parts[len(parts)-1]
+				if req.Method == "" && uriMethod != "" {
+					req.Method = uriMethod
+				}
+			}
 		}
-	}
 
-	// Get the endpoint and codecs from the map using the method
-	// defined in the JSON  object
-	ecm, ok := s.ecm[req.Method]
-	if !ok {
-		err := methodNotFoundError(fmt.Sprintf("Method %s was not found.", req.Method))
-		s.logger.Log("err", err)
-		s.errorEncoder(ctx, err, w)
-		return
-	}
+		// Get the endpoint and codecs from the map using the method
+		// defined in the JSON  object
+		ecm, ok := s.ecm[req.Method]
+		if !ok {
+			err := methodNotFoundError(fmt.Sprintf("Method %s was not found.", req.Method))
+			s.logger.Log("err", err)
+			responses <- s.errorEncoder(ctx, err)
+			continue
+		}
 
-	// Decode the JSON "params"
-	reqParams, err := ecm.Decode(ctx, req.Params)
-	if err != nil {
-		s.logger.Log("err", err)
-		s.errorEncoder(ctx, err, w)
-		return
-	}
+		// Decode the JSON "params"
+		reqParams, err := ecm.Decode(ctx, req.Params)
+		if err != nil {
+			s.logger.Log("err", err)
+			responses <- s.errorEncoder(ctx, err)
+			continue
+		}
 
-	// Call the Endpoint with the params
-	response, err := ecm.Endpoint(ctx, reqParams)
-	if err != nil {
-		s.logger.Log("err", err)
-		s.errorEncoder(ctx, err, w)
-		return
+		go func(ctx context.Context, req Request, reqParams interface{}) {
+			// Call the Endpoint with the params
+			response, err := ecm.Endpoint(ctx, reqParams)
+			if err != nil {
+				s.logger.Log("err", err)
+				responses <- s.errorEncoder(ctx, err)
+				return
+			}
+
+			res := Response{
+				ID:      req.ID,
+				JSONRPC: Version,
+			}
+
+			// Encode the response from the Endpoint
+			resParams, err := ecm.Encode(ctx, response)
+			if err != nil {
+				s.logger.Log("err", err)
+				responses <- s.errorEncoder(ctx, err)
+				return
+			}
+
+			res.Result = resParams
+
+			responses <- res
+
+		}(ctx, req, reqParams)
 	}
 
 	for _, f := range s.after {
 		ctx = f(ctx, w)
 	}
 
-	res := Response{
-		ID:      req.ID,
-		JSONRPC: Version,
+	res := []Response{}
+
+	for i := 0; i < len(reqs); i++ {
+		res = append(res, <-responses)
 	}
 
-	// Encode the response from the Endpoint
-	resParams, err := ecm.Encode(ctx, response)
-	if err != nil {
-		s.logger.Log("err", err)
-		s.errorEncoder(ctx, err, w)
+	s.responseWriter(ctx, res, isBatch, w)
+}
+
+func DefaultResponseWriter(ctx context.Context, responses []Response, isBatch bool, w http.ResponseWriter) {
+	w.Header().Set("Content-Type", ContentType)
+	if !isBatch && len(responses) > 0 {
+		_ = json.NewEncoder(w).Encode(responses[0])
 		return
 	}
-
-	res.Result = resParams
-
-	w.Header().Set("Content-Type", ContentType)
-	_ = json.NewEncoder(w).Encode(res)
+	_ = json.NewEncoder(w).Encode(responses)
 }
 
 // DefaultErrorEncoder writes the error to the ResponseWriter,
@@ -177,14 +240,7 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // If the error implements ErrorCoder, the provided code will be set on the
 // response error.
 // If the error implements Headerer, the given headers will be set.
-func DefaultErrorEncoder(ctx context.Context, err error, w http.ResponseWriter) {
-	w.Header().Set("Content-Type", ContentType)
-	if headerer, ok := err.(httptransport.Headerer); ok {
-		for k := range headerer.Headers() {
-			w.Header().Set(k, headerer.Headers().Get(k))
-		}
-	}
-
+func DefaultErrorEncoder(ctx context.Context, err error) Response {
 	e := Error{
 		Code:    InternalError,
 		Message: err.Error(),
@@ -193,17 +249,20 @@ func DefaultErrorEncoder(ctx context.Context, err error, w http.ResponseWriter) 
 		e.Code = sc.ErrorCode()
 	}
 
-	w.WriteHeader(http.StatusOK)
+	if sc, ok := err.(ErrorData); ok {
+		e.Data = sc.ErrorData()
+	}
 
 	var requestID *RequestID
-	if v := ctx.Value(requestIDKey); v != nil {
+	if v := ctx.Value(RequestIDKey); v != nil {
 		requestID = v.(*RequestID)
 	}
-	_ = json.NewEncoder(w).Encode(Response{
+
+	return Response{
 		ID:      requestID,
 		JSONRPC: Version,
 		Error:   &e,
-	})
+	}
 }
 
 // ErrorCoder is checked by DefaultErrorEncoder. If an error value implements
@@ -213,6 +272,15 @@ func DefaultErrorEncoder(ctx context.Context, err error, w http.ResponseWriter) 
 // By default, InternalError (-32603) is used.
 type ErrorCoder interface {
 	ErrorCode() int
+}
+
+// ErrorData is checked by DefaultErrorEncoder. If an error value implements
+// ErrorData, the interface{} result of ErrorData() will be used as the JSONRPC
+// error data when encoding the error.
+//
+// By default, empty is used.
+type ErrorData interface {
+	ErrorData() int
 }
 
 // interceptingWriter intercepts calls to WriteHeader, so that a finalizer

@@ -14,6 +14,10 @@ import (
 	fasthttptransport "github.com/l-vitaly/go-kit/transport/fasthttp"
 )
 
+type requestIDKeyType struct{}
+
+var RequestIDKey requestIDKeyType
+
 // Server wraps an endpoint and implements http.Handler.
 type Server struct {
 	ecm          EndpointCodecMap
@@ -82,12 +86,6 @@ func (s Server) ServeFastHTTP(rctx *fasthttp.RequestCtx) {
 
 	ctx := context.TODO()
 
-	//if s.finalizer != nil {
-	//	iw := &interceptingWriter{rctx, http.StatusOK}
-	//	defer func() { s.finalizer(ctx, iw.code, r) }()
-	//	rctx = iw
-	//}
-
 	for _, f := range s.before {
 		ctx = f(ctx, &rctx.Request)
 	}
@@ -102,6 +100,8 @@ func (s Server) ServeFastHTTP(rctx *fasthttp.RequestCtx) {
 		s.errorEncoder(ctx, rpcerr, rctx)
 		return
 	}
+
+	ctx = context.WithValue(ctx, RequestIDKey, req.ID)
 
 	// Get JSON RPC method from URI.
 	// Note: the method in the uri has priority.
@@ -171,7 +171,7 @@ func (s Server) ServeFastHTTP(rctx *fasthttp.RequestCtx) {
 // If the error implements ErrorCoder, the provided code will be set on the
 // response error.
 // If the error implements Headerer, the given headers will be set.
-func DefaultErrorEncoder(_ context.Context, err error, rctx *fasthttp.RequestCtx) {
+func DefaultErrorEncoder(ctx context.Context, err error, rctx *fasthttp.RequestCtx) {
 	rctx.Response.Header.Set("Content-Type", ContentType)
 	if headerer, ok := err.(fasthttptransport.Headerer); ok {
 		for k := range headerer.Headers() {
@@ -186,10 +186,19 @@ func DefaultErrorEncoder(_ context.Context, err error, rctx *fasthttp.RequestCtx
 	if sc, ok := err.(ErrorCoder); ok {
 		e.Code = sc.ErrorCode()
 	}
+	if sc, ok := err.(ErrorData); ok {
+		e.Data = sc.ErrorData()
+	}
 
 	rctx.SetStatusCode(http.StatusOK)
 
+	var requestID *RequestID
+	if v := ctx.Value(RequestIDKey); v != nil {
+		requestID = v.(*RequestID)
+	}
+
 	b, _ := ffjson.Marshal(Response{
+		ID:      requestID,
 		JSONRPC: Version,
 		Error:   &e,
 	})
@@ -205,16 +214,11 @@ type ErrorCoder interface {
 	ErrorCode() int
 }
 
-// interceptingWriter intercepts calls to WriteHeader, so that a finalizer
-// can be given the correct status code.
-type interceptingWriter struct {
-	fasthttp.RequestCtx
-	code int
-}
-
-// WriteHeader may not be explicitly called, so care must be taken to
-// initialize w.code to its default value of http.StatusOK.
-func (w *interceptingWriter) WriteHeader(code int) {
-	w.code = code
-	w.RequestCtx.SetStatusCode(code)
+// ErrorData is checked by DefaultErrorEncoder. If an error value implements
+// ErrorData, the interface{} result of ErrorData() will be used as the JSONRPC
+// error data when encoding the error.
+//
+// By default, empty is used.
+type ErrorData interface {
+	ErrorData() int
 }

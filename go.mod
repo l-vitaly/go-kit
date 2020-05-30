@@ -2,6 +2,8 @@ module github.com/l-vitaly/go-kit
 
 go 1.13
 
+replace github.com/l-vitaly/go-kit => /Users/vitaly/go/src/github.com/l-vitaly/go-kit
+
 require (
 	github.com/fortytw2/leaktest v1.3.0 // indirect
 	github.com/gammazero/nexus v2.1.0+incompatible
