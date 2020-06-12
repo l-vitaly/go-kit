@@ -8,7 +8,6 @@ Max retry.
 
 ```go
 func NewGRPCClient(conn *grpc.ClientConn) Service {
-
     var incrEndpoint endpoint.Endpoint
 	{
 		incrEndpoint = grpctransport.NewClient(
@@ -21,15 +20,14 @@ func NewGRPCClient(conn *grpc.ClientConn) Service {
 			options...,
 		).Endpoint()
 	}
-	incrEndpoint = retry.MakeEndpoint(100*time.Millisecond, incrEndpoint, retry.Max(10))
+	incrEndpoint = retry.Endpoint(100*time.Millisecond)(incrEndpoint)
 }
 ```
 
-Always retry.
+Callback for always retry.
 
 ```go
 func NewGRPCClient(conn *grpc.ClientConn) Service {
-
     var incrEndpoint endpoint.Endpoint
 	{
 		incrEndpoint = grpctransport.NewClient(
@@ -42,6 +40,6 @@ func NewGRPCClient(conn *grpc.ClientConn) Service {
 			options...,
 		).Endpoint()
 	}
-	incrEndpoint = retry.MakeEndpoint(100*time.Millisecond, incrEndpoint, retry.Always())
+	incrEndpoint = retry.WithCallbackEndpoint(100*time.Millisecond, func(n int, received error) (keepTrying bool, replacement error) { return true, nil})(incrEndpoint)
 }
 ```
