@@ -280,7 +280,7 @@ type ErrorCoder interface {
 //
 // By default, empty is used.
 type ErrorData interface {
-	ErrorData() int
+	ErrorData() interface{}
 }
 
 // interceptingWriter intercepts calls to WriteHeader, so that a finalizer
