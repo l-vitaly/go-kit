@@ -8,14 +8,14 @@ import (
 	"github.com/go-kit/kit/sd/lb"
 )
 
-func Endpoint(max int) endpoint.Middleware {
+func Endpoint(max int, timeout time.Duration) endpoint.Middleware {
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
-		return lb.Retry(max, time.Second, lb.NewRoundRobin(sd.FixedEndpointer{next}))
+		return lb.Retry(max, timeout, lb.NewRoundRobin(sd.FixedEndpointer{next}))
 	}
 }
 
-func WithCallbackEndpoint(cb lb.Callback) endpoint.Middleware {
+func WithCallbackEndpoint(cb lb.Callback, timeout time.Duration) endpoint.Middleware {
 	return func(next endpoint.Endpoint) endpoint.Endpoint {
-		return lb.RetryWithCallback(time.Second, lb.NewRoundRobin(sd.FixedEndpointer{next}), cb)
+		return lb.RetryWithCallback(timeout, lb.NewRoundRobin(sd.FixedEndpointer{next}), cb)
 	}
 }
