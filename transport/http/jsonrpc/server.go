@@ -183,7 +183,7 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		go func(ctx context.Context, req Request, reqParams interface{}) {
+		requestParamsFunc := func(ctx context.Context, req Request, reqParams interface{}) {
 			// Call the Endpoint with the params
 			response, err := ecm.Endpoint(ctx, reqParams)
 			if err != nil {
@@ -209,7 +209,12 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			responses <- res
 
-		}(ctx, req, reqParams)
+		}
+		if req.Ansyc {
+			go requestParamsFunc(ctx, req, reqParams)
+		} else {
+			requestParamsFunc(ctx, req, reqParams)
+		}
 	}
 
 	for _, f := range s.after {

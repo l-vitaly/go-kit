@@ -7,6 +7,7 @@ import "encoding/json"
 type Request struct {
 	JSONRPC string          `json:"jsonrpc"`
 	Method  string          `json:"method"`
+	Ansyc   bool            `json:"async"`
 	Params  json.RawMessage `json:"params"`
 	ID      *RequestID      `json:"id"`
 }
