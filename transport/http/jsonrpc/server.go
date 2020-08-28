@@ -121,7 +121,7 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		rpcerr := parseError("JSON could not be read body: " + err.Error())
-		s.logger.Log("err", rpcerr)
+		_ = s.logger.Log("err", rpcerr)
 		s.responseWriter(ctx, []Response{s.errorEncoder(ctx, rpcerr)}, false, w)
 		return
 	}
@@ -143,7 +143,7 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(body, &reqs)
 	if err != nil {
 		rpcerr := parseError("JSON could not be decoded: " + err.Error())
-		s.logger.Log("err", rpcerr)
+		_ = s.logger.Log("err", rpcerr)
 		s.responseWriter(ctx, []Response{s.errorEncoder(ctx, rpcerr)}, isBatch, w)
 		return
 	}
@@ -170,7 +170,7 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ecm, ok := s.ecm[req.Method]
 		if !ok {
 			err := methodNotFoundError(fmt.Sprintf("Method %s was not found.", req.Method))
-			s.logger.Log("err", err)
+			_ = s.logger.Log("err", err)
 			responses <- s.errorEncoder(ctx, err)
 			continue
 		}
@@ -178,16 +178,16 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Decode the JSON "params"
 		reqParams, err := ecm.Decode(ctx, req.Params)
 		if err != nil {
-			s.logger.Log("err", err)
+			_ = s.logger.Log("err", err)
 			responses <- s.errorEncoder(ctx, err)
 			continue
 		}
 
-		go func(ctx context.Context, req Request, reqParams interface{}) {
+		reqFn := func(ctx context.Context, req Request, reqParams interface{}) {
 			// Call the Endpoint with the params
 			response, err := ecm.Endpoint(ctx, reqParams)
 			if err != nil {
-				s.logger.Log("err", err)
+				_ = s.logger.Log("err", err)
 				responses <- s.errorEncoder(ctx, err)
 				return
 			}
@@ -200,16 +200,20 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Encode the response from the Endpoint
 			resParams, err := ecm.Encode(ctx, response)
 			if err != nil {
-				s.logger.Log("err", err)
+				_ = s.logger.Log("err", err)
 				responses <- s.errorEncoder(ctx, err)
 				return
 			}
 
 			res.Result = resParams
-
 			responses <- res
+		}
 
-		}(ctx, req, reqParams)
+		if r.Header.Get("X-Async") == "on" {
+			go reqFn(ctx, req, reqParams)
+		} else {
+			reqFn(ctx, req, reqParams)
+		}
 	}
 
 	for _, f := range s.after {

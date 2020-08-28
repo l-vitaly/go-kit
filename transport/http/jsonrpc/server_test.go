@@ -215,8 +215,8 @@ func TestServerHappyPath(t *testing.T) {
 	}
 }
 
-func TestServerBatchHappyPath(t *testing.T) {
-	step, response := testServerForBatch(t)
+func TestServerBatchAsyncHappyPath(t *testing.T) {
+	step, response := testServerForBatch(t, true)
 	step()
 	step()
 	resp := <-response
@@ -232,6 +232,38 @@ func TestServerBatchHappyPath(t *testing.T) {
 	}
 
 	for _, r := range res {
+		if r.JSONRPC != jsonrpc.Version {
+			t.Fatalf("JSONRPC Version: want=%s, got=%s", jsonrpc.Version, r.JSONRPC)
+		}
+		if r.Error != nil {
+			t.Fatalf("Unxpected error on response: %s", buf)
+		}
+	}
+}
+
+func TestServerBatchHappyPath(t *testing.T) {
+	step, response := testServerForBatch(t, false)
+	step()
+	step()
+	resp := <-response
+
+	defer resp.Body.Close() // nolint
+	buf, _ := ioutil.ReadAll(resp.Body)
+	if want, have := http.StatusOK, resp.StatusCode; want != have {
+		t.Errorf("want %d, have %d (%s)", want, have, buf)
+	}
+	res, err := unmarshalResponses(buf)
+	if err != nil {
+		t.Fatalf("Can't decode response. err=%s, body=%s", err, buf)
+	}
+	for i, r := range res {
+		id, err := r.ID.Int()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id != i+1 {
+			t.Fatalf("JSONRPC ID: want=%d, got=%d", i+1, id)
+		}
 		if r.JSONRPC != jsonrpc.Version {
 			t.Fatalf("JSONRPC Version: want=%s, got=%s", jsonrpc.Version, r.JSONRPC)
 		}
@@ -376,16 +408,16 @@ func testServer(t *testing.T) (step func(), resp <-chan *http.Response) {
 	return func() { stepch <- true }, response
 }
 
-func testServerForBatch(t *testing.T) (step func(), resp <-chan *http.Response) {
+func testServerForBatch(t *testing.T, async bool) (step func(), resp <-chan *http.Response) {
 	var (
 		stepch      = make(chan bool)
 		endpointAdd = func(ctx context.Context, request interface{}) (response interface{}, err error) {
 			<-stepch
-			return struct{}{}, nil
+			return "add", nil
 		}
 		endpointDelete = func(ctx context.Context, request interface{}) (response interface{}, err error) {
 			<-stepch
-			return struct{}{}, nil
+			return "delete", nil
 		}
 		response = make(chan *http.Response)
 		ecm      = jsonrpc.EndpointCodecMap{
@@ -405,8 +437,18 @@ func testServerForBatch(t *testing.T) (step func(), resp <-chan *http.Response) 
 	go func() {
 		server := httptest.NewServer(handler)
 		defer server.Close()
-		rb := strings.NewReader(`[{"jsonrpc": "2.0", "method": "add", "params": [3, 2], "id": 1}, {"jsonrpc": "2.0", "method": "delete", "params": [3, 2], "id": 1}]`)
-		resp, err := http.Post(server.URL, "application/json", rb)
+		rb := strings.NewReader(`[{"jsonrpc": "2.0", "method": "add", "params": [3, 2], "id": 1}, {"jsonrpc": "2.0", "method": "delete", "params": [3, 2], "id": 2}]`)
+
+		req, err := http.NewRequest(http.MethodPost, server.URL, rb)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if async {
+			req.Header.Set("X-Async", "on")
+		}
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Error(err)
 			return
