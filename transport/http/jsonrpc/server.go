@@ -288,6 +288,12 @@ type ErrorData interface {
 	SetErrorData(data interface{})
 }
 
+// ErrorMessager is checked by DefaultErrorEncoder. If the error value implements
+// ErrorMessager, the error message will be set via SetErrorMessage.
+type ErrorMessager interface {
+	SetErrorMessage(message string)
+}
+
 // interceptingWriter intercepts calls to WriteHeader, so that a finalizer
 // can be given the correct status code.
 type interceptingWriter struct {
