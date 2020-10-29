@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/go-kit/kit/endpoint"
@@ -18,10 +16,6 @@ import (
 
 func addBody() []byte {
 	return []byte(`{"jsonrpc": "2.0", "method": "add", "params": [3, 2], "id": 1}`)
-}
-
-func body(in string) io.Reader {
-	return strings.NewReader(in)
 }
 
 func expectErrorCode(t *testing.T, want int, body []byte) {

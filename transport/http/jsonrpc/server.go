@@ -285,13 +285,6 @@ type ErrorCoder interface {
 // By default, empty is used.
 type ErrorData interface {
 	ErrorData() interface{}
-	SetErrorData(data interface{})
-}
-
-// ErrorMessager is checked by DefaultErrorEncoder. If the error value implements
-// ErrorMessager, the error message will be set via SetErrorMessage.
-type ErrorMessager interface {
-	SetErrorMessage(message string)
 }
 
 // interceptingWriter intercepts calls to WriteHeader, so that a finalizer

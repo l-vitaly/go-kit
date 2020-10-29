@@ -163,7 +163,7 @@ func TestCanUseDefaults(t *testing.T) {
 		requestBody = b
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(testbody))
+		_, _ = w.Write([]byte(testbody))
 	}))
 
 	sut := jsonrpc.NewClient(
