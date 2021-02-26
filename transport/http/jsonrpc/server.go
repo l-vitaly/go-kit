@@ -8,10 +8,10 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
 
 	"github.com/go-kit/kit/log"
 	httptransport "github.com/go-kit/kit/transport/http"
+	"github.com/gorilla/websocket"
 )
 
 type requestIDKeyType struct{}
@@ -20,13 +20,13 @@ var RequestIDKey requestIDKeyType
 
 // Server wraps an endpoint and implements http.Handler.
 type Server struct {
-	ecm            EndpointCodecMap
-	before         []httptransport.RequestFunc
-	after          []httptransport.ServerResponseFunc
-	errorEncoder   ErrorEncoder
-	responseWriter ResponseWriter
-	finalizer      httptransport.ServerFinalizerFunc
-	logger         log.Logger
+	upgrader     websocket.Upgrader
+	ecm          EndpointCodecMap
+	before       []httptransport.RequestFunc
+	after        []httptransport.ServerResponseFunc
+	errorEncoder ErrorEncoder
+	finalizer    httptransport.ServerFinalizerFunc
+	logger       log.Logger
 }
 
 // NewServer constructs a new server, which implements http.Server.
@@ -35,10 +35,9 @@ func NewServer(
 	options ...ServerOption,
 ) *Server {
 	s := &Server{
-		ecm:            ecm,
-		errorEncoder:   DefaultErrorEncoder,
-		responseWriter: DefaultResponseWriter,
-		logger:         log.NewNopLogger(),
+		ecm:          ecm,
+		errorEncoder: DefaultErrorEncoder,
+		logger:       log.NewNopLogger(),
 	}
 	for _, option := range options {
 		option(s)
@@ -69,11 +68,6 @@ func ServerErrorEncoder(ee ErrorEncoder) ServerOption {
 	return func(s *Server) { s.errorEncoder = ee }
 }
 
-// ServerResponseWriter ...
-func ServerResponseWriter(rw ResponseWriter) ServerOption {
-	return func(s *Server) { s.responseWriter = rw }
-}
-
 // ServerErrorLogger is used to log non-terminal errors. By default, no errors
 // are logged. This is intended as a diagnostic measure. Finer-grained control
 // of error handling, including logging in more detail, should be performed in a
@@ -100,12 +94,6 @@ func ServerFinalizer(f httptransport.ServerFinalizerFunc) ServerOption {
 
 // ServeHTTP implements http.Handler.
 func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_, _ = io.WriteString(w, "405 must POST\n")
-		return
-	}
 	ctx := r.Context()
 
 	if s.finalizer != nil {
@@ -113,58 +101,79 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer func() { s.finalizer(ctx, iw.code, r) }()
 		w = iw
 	}
-
 	for _, f := range s.before {
 		ctx = f(ctx, r)
+	}
+	s.serveHTTP(ctx, w, r)
+}
+
+func (s Server) marshalResponse(responses []Response, isBatch bool) (data []byte) {
+	if !isBatch && len(responses) > 0 {
+		data, _ = json.Marshal(responses[0])
+		return
+	}
+	data, _ = json.Marshal(responses)
+	return
+}
+
+// ServeHTTP implements http.Handler.
+func (s Server) serveHTTP(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", ContentType)
+
+	if r.Method != http.MethodPost {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, _ = io.WriteString(w, "405 must POST\n")
+		return
 	}
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		rpcerr := parseError("JSON could not be read body: " + err.Error())
 		_ = s.logger.Log("err", rpcerr)
-		s.responseWriter(ctx, []Response{s.errorEncoder(ctx, rpcerr)}, false, w)
+		_, _ = w.Write(s.marshalResponse([]Response{s.errorEncoder(ctx, rpcerr)}, false))
 		return
 	}
 
-	isBatch := true
-	if !bytes.HasPrefix(body, []byte("[")) && !bytes.HasSuffix(body, []byte("]")) {
-		isBatch = false
+	async := r.Header.Get("X-Async") == "on"
 
+	result, isBatch, err := s.rpcCall(ctx, body, async)
+	if err != nil {
+		rpcerr := parseError("jsonrpc internal error: " + err.Error())
+		_ = s.logger.Log("err", rpcerr)
+		_, _ = w.Write(s.marshalResponse([]Response{s.errorEncoder(ctx, rpcerr)}, false))
+		return
+	}
+
+	for _, f := range s.after {
+		ctx = f(ctx, w)
+	}
+
+	_, _ = w.Write(s.marshalResponse(result, isBatch))
+}
+
+func (s Server) rpcCall(ctx context.Context, data []byte, async bool) (result []Response, isBatch bool, err error) {
+	isBatch = true
+	if !bytes.HasPrefix(data, []byte("[")) && !bytes.HasSuffix(data, []byte("]")) {
+		isBatch = false
 		buf := new(bytes.Buffer)
 		buf.WriteString("[")
-		buf.Write(body)
+		buf.Write(data)
 		buf.WriteString("]")
-
-		body = buf.Bytes()
+		data = buf.Bytes()
 	}
 
 	// Decode the body into an object
 	var reqs []Request
-	err = json.Unmarshal(body, &reqs)
+	err = json.Unmarshal(data, &reqs)
 	if err != nil {
-		rpcerr := parseError("JSON could not be decoded: " + err.Error())
-		_ = s.logger.Log("err", rpcerr)
-		s.responseWriter(ctx, []Response{s.errorEncoder(ctx, rpcerr)}, isBatch, w)
-		return
+		return nil, false, err
 	}
 
 	responses := make(chan Response, len(reqs))
 
 	for _, req := range reqs {
 		ctx = context.WithValue(ctx, RequestIDKey, req.ID)
-
-		if !isBatch {
-			// Get JSON RPC method from URI.
-			// Note: the method in the uri has priority.
-			parts := strings.Split(r.URL.Path, "/")
-			if len(parts) > 0 {
-				uriMethod := parts[len(parts)-1]
-				if req.Method == "" && uriMethod != "" {
-					req.Method = uriMethod
-				}
-			}
-		}
-
 		// Get the endpoint and codecs from the map using the method
 		// defined in the JSON  object
 		ecm, ok := s.ecm[req.Method]
@@ -204,38 +213,20 @@ func (s Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				responses <- s.errorEncoder(ctx, err)
 				return
 			}
-
 			res.Result = resParams
 			responses <- res
 		}
-
-		if r.Header.Get("X-Async") == "on" {
+		if async {
 			go reqFn(ctx, req, reqParams)
 		} else {
 			reqFn(ctx, req, reqParams)
 		}
 	}
 
-	for _, f := range s.after {
-		ctx = f(ctx, w)
-	}
-
-	res := []Response{}
-
 	for i := 0; i < len(reqs); i++ {
-		res = append(res, <-responses)
+		result = append(result, <-responses)
 	}
-
-	s.responseWriter(ctx, res, isBatch, w)
-}
-
-func DefaultResponseWriter(ctx context.Context, responses []Response, isBatch bool, w http.ResponseWriter) {
-	w.Header().Set("Content-Type", ContentType)
-	if !isBatch && len(responses) > 0 {
-		_ = json.NewEncoder(w).Encode(responses[0])
-		return
-	}
-	_ = json.NewEncoder(w).Encode(responses)
+	return
 }
 
 // DefaultErrorEncoder writes the error to the ResponseWriter,
