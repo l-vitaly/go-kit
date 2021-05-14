@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -164,7 +165,7 @@ func (c Client) Endpoint() endpoint.Endpoint {
 			return nil, err
 		}
 		rpcReq := clientRequest{
-			JSONRPC: "",
+			JSONRPC: Version,
 			Method:  c.method,
 			Params:  params,
 			ID:      c.requestID.Generate(),
@@ -196,18 +197,19 @@ func (c Client) Endpoint() endpoint.Endpoint {
 			defer resp.Body.Close()
 		}
 
-		// Decode the body into an object
-		var rpcRes Response
-		err = json.NewDecoder(resp.Body).Decode(&rpcRes)
-		if err != nil {
-			return nil, err
+		if resp.StatusCode == 200 {
+			// Decode the body into an object
+			var rpcRes Response
+			err = json.NewDecoder(resp.Body).Decode(&rpcRes)
+			if err != nil {
+				return nil, err
+			}
+			for _, f := range c.after {
+				ctx = f(ctx, resp)
+			}
+			return c.dec(ctx, rpcRes)
 		}
-
-		for _, f := range c.after {
-			ctx = f(ctx, resp)
-		}
-
-		return c.dec(ctx, rpcRes)
+		return nil, errors.New(resp.Status)
 	}
 }
 
