@@ -45,10 +45,12 @@ var (
 )
 
 type wsClient struct {
-	ctx  context.Context
-	s    *Server
-	conn *websocket.Conn
-	send chan []byte
+	ctx       context.Context
+	s         *Server
+	conn      *websocket.Conn
+	send      chan []byte
+	stream    map[string]*Stream
+	streamMux sync.RWMutex
 }
 
 func (c *wsClient) readPump() {
@@ -72,7 +74,7 @@ func (c *wsClient) readPump() {
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 
-		result, isBatch, err := c.s.rpcCall(c.ctx, nil, message, false)
+		result, isBatch, err := c.s.rpcCall(c.ctx, c, message, false)
 		if err != nil {
 			_ = c.s.logger.Log("err", err)
 			c.send <- c.s.marshalResponse([]Response{c.s.errorEncoder(c.ctx, err)}, isBatch)
@@ -126,7 +128,7 @@ func (c *wsClient) writePump() {
 type Stream struct {
 	streamRead chan []byte
 	reqID      *RequestID
-	conn       *websocket.Conn
+	c          *wsClient
 }
 
 func (s *Stream) Read() chan []byte {
@@ -138,11 +140,13 @@ func (s *Stream) Write(v interface{}) error {
 	if err != nil {
 		return err
 	}
-	return s.conn.WriteJSON(Response{
+	s.c.send <- s.c.s.marshalResponse([]Response{{
 		JSONRPC: "2.0",
 		Result:  result,
 		ID:      s.reqID,
-	})
+		Stream:  true,
+	}}, false)
+	return nil
 }
 
 // Server wraps an endpoint and implements http.Handler.
@@ -151,14 +155,11 @@ type Server struct {
 	ecm          EndpointCodecMap
 	ecms         EndpointCodecStreamMap
 	before       []httptransport.RequestFunc
-	stream       map[string]*Stream
-	streamMux    sync.RWMutex
 	errorEncoder ErrorEncoder
 	workers      int
 	workerBuffer int
 
 	clients    map[*wsClient]bool
-	broadcast  chan []byte
 	register   chan *wsClient
 	unregister chan *wsClient
 
@@ -178,12 +179,10 @@ func NewServer(
 		logger:       log.NewNopLogger(),
 		workers:      workersDefault,
 		workerBuffer: workerBufferDefault,
-		stream:       map[string]*Stream{},
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
-		broadcast:  make(chan []byte),
 		register:   make(chan *wsClient),
 		unregister: make(chan *wsClient),
 		clients:    make(map[*wsClient]bool),
@@ -254,40 +253,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c := &wsClient{ctx: ctx, s: s, conn: conn, send: make(chan []byte, 256)}
+	c := &wsClient{ctx: ctx, s: s, conn: conn, send: make(chan []byte, 256), stream: map[string]*Stream{}}
 
 	s.register <- c
 
 	go c.writePump()
 	go c.readPump()
 }
-
-// ServeHTTP implements http.Handler.
-//func (s *Server) serveWS(ctx context.Context, conn *websocket.Conn) {
-//	for {
-//		_, reader, err := conn.NextReader()
-//		if err != nil {
-//			_ = s.logger.Log("err", err)
-//			_ = conn.WriteJSON(s.errorEncoder(ctx, err))
-//			break
-//		}
-//		data, err := ioutil.ReadAll(reader)
-//		if err != nil {
-//			_ = s.logger.Log("err", err)
-//			_ = conn.WriteJSON(s.errorEncoder(ctx, err))
-//			continue
-//		}
-//		result, isBatch, err := s.rpcCall(ctx, conn, data, false)
-//		if err != nil {
-//			_ = s.logger.Log("err", err)
-//			_ = conn.WriteJSON(s.errorEncoder(ctx, err))
-//			continue
-//		}
-//		if err := conn.WriteMessage(websocket.TextMessage, s.marshalResponse(result, isBatch)); err != nil {
-//			_ = s.logger.Log("err", err)
-//		}
-//	}
-//}
 
 func (s *Server) marshalResponse(responses []Response, isBatch bool) (data []byte) {
 	if !isBatch && len(responses) > 0 {
@@ -298,60 +270,55 @@ func (s *Server) marshalResponse(responses []Response, isBatch bool) (data []byt
 	return
 }
 
-func (s *Server) requestWorker(ctx context.Context, conn *websocket.Conn, requests chan Request, responses chan Response) {
+func (s *Server) requestWorker(ctx context.Context, c *wsClient, requests chan Request, responses chan Response) {
 	for req := range requests {
-		//reqID := reqID2Str(req.ID)
 
-		//s.streamMux.Lock()
-		//if stream, ok := s.stream[reqID]; ok {
-		//	s.streamMux.Unlock()
-		//
-		//	stream.streamRead <- req.Params
-		//
-		//	continue
-		//}
-		//s.streamMux.Unlock()
+		c.streamMux.Lock()
+		if stream, ok := c.stream[req.Method]; ok {
+			c.streamMux.Unlock()
+			stream.streamRead <- req.Params
+			continue
+		}
+		c.streamMux.Unlock()
 
 		ctx = context.WithValue(ctx, RequestIDKey, req.ID)
 		// Get the endpoint and codecs from the map using the method
 		// defined in the JSON  object
 		ecm, ok := s.ecm[req.Method]
 		if !ok {
-			//if ecm, ok := s.ecms[req.Method]; ok {
-			//	stream := &Stream{
-			//		conn:       conn,
-			//		streamRead: make(chan []byte),
-			//	}
-			//
-			//	s.streamMux.Lock()
-			//	s.stream[reqID] = stream
-			//	s.streamMux.Unlock()
-			//
-			//	// Decode the JSON "params"
-			//	reqParams, err := ecm.Decode(ctx, req.Params, stream)
-			//	if err != nil {
-			//		_ = s.logger.Log("err", err)
-			//		responses <- s.errorEncoder(ctx, err)
-			//		continue
-			//	}
-			//
-			//	go func() {
-			//		responses <- Response{
-			//			ID:      req.ID,
-			//			JSONRPC: Version,
-			//			Stream:  true,
-			//		}
-			//
-			//		_, _ = ecm.Endpoint(ctx, reqParams)
-			//	}()
-			//
-			//	continue
-			//} else {
-			err := methodNotFoundError(fmt.Sprintf("Method %s was not found.", req.Method))
-			_ = s.logger.Log("err", err)
-			responses <- s.errorEncoder(ctx, err)
-			continue
-			//}
+			if ecm, ok := s.ecms[req.Method]; ok {
+				stream := &Stream{
+					reqID:      req.ID,
+					c:          c,
+					streamRead: make(chan []byte),
+				}
+
+				c.streamMux.Lock()
+				c.stream[req.Method] = stream
+				c.streamMux.Unlock()
+
+				// Decode the JSON "params"
+				reqParams, err := ecm.Decode(ctx, req.Params, stream)
+				if err != nil {
+					_ = s.logger.Log("err", err)
+					responses <- s.errorEncoder(ctx, err)
+					continue
+				}
+				go func() {
+					responses <- Response{
+						ID:      req.ID,
+						JSONRPC: Version,
+						Stream:  true,
+					}
+					_, _ = ecm.Endpoint(ctx, reqParams)
+				}()
+				continue
+			} else {
+				err := methodNotFoundError(fmt.Sprintf("Method %s was not found.", req.Method))
+				_ = s.logger.Log("err", err)
+				responses <- s.errorEncoder(ctx, err)
+				continue
+			}
 		}
 
 		// Decode the JSON "params"
@@ -384,7 +351,7 @@ func (s *Server) requestWorker(ctx context.Context, conn *websocket.Conn, reques
 	}
 }
 
-func (s *Server) rpcCall(ctx context.Context, conn *websocket.Conn, data []byte, async bool) (result []Response, isBatch bool, err error) {
+func (s *Server) rpcCall(ctx context.Context, c *wsClient, data []byte, async bool) (result []Response, isBatch bool, err error) {
 	isBatch = true
 	if len(data) > 0 && !bytes.HasPrefix(data, []byte("[")) && !bytes.HasSuffix(data, []byte("]")) {
 		isBatch = false
@@ -406,10 +373,10 @@ func (s *Server) rpcCall(ctx context.Context, conn *websocket.Conn, data []byte,
 	responses := make(chan Response, s.workerBuffer)
 
 	if async {
-		go s.requestWorker(ctx, conn, requests, responses)
+		go s.requestWorker(ctx, c, requests, responses)
 	} else {
 		for w := 1; w <= s.workers; w++ {
-			go s.requestWorker(ctx, conn, requests, responses)
+			go s.requestWorker(ctx, c, requests, responses)
 		}
 	}
 
@@ -433,15 +400,6 @@ func (s *Server) run() {
 			if _, ok := s.clients[client]; ok {
 				delete(s.clients, client)
 				close(client.send)
-			}
-		case message := <-s.broadcast:
-			for client := range s.clients {
-				select {
-				case client.send <- message:
-				default:
-					close(client.send)
-					delete(s.clients, client)
-				}
 			}
 		}
 	}
