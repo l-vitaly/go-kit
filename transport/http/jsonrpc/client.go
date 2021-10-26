@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -164,7 +165,7 @@ func (c Client) Endpoint() endpoint.Endpoint {
 			return nil, err
 		}
 		rpcReq := clientRequest{
-			JSONRPC: "",
+			JSONRPC: Version,
 			Method:  c.method,
 			Params:  params,
 			ID:      c.requestID.Generate(),
@@ -190,6 +191,10 @@ func (c Client) Endpoint() endpoint.Endpoint {
 		resp, err = c.client.Do(req.WithContext(ctx))
 		if err != nil {
 			return nil, err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 		}
 
 		if !c.bufferedStream {
